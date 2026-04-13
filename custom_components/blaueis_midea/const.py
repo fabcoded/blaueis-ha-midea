@@ -6,9 +6,13 @@ CONF_PSK = "psk"
 
 # Fields that fold into the climate entity — never exposed as standalone entities.
 CLIMATE_FIELDS = frozenset({
+    "power",
     "operating_mode",
     "target_temperature",
     "fan_speed",
+    "indoor_temperature",
+    "swing_vertical",
+    "swing_horizontal",
 })
 
 # Glossary field_class → HA entity type mapping.
