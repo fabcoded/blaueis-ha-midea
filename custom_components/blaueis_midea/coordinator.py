@@ -56,7 +56,7 @@ class BlaueisMideaCoordinator:
             manufacturer="Midea",
             model="HVAC",
             sw_version=self.device.gateway_info.get("version", "unknown"),
-            via_device=(DOMAIN, f"{self.host}:{self.port}_gw"),
+            # via_device=(DOMAIN, f"{self.host}:{self.port}_gw"),  # TODO: re-enable when platform load order is fixed
         )
 
     @property
