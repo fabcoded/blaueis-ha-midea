@@ -85,14 +85,9 @@ class BlaueisMideaCoordinator:
         await self.device.start()
         self._connected = True
 
-        # Register all available fields for polling
-        avail = self.device.available_fields
-        all_field_names = set(avail.keys())
-        self.device.register_fields(all_field_names)
-
         _LOGGER.info(
             "Blaueis coordinator started: %d available fields, queries=%s",
-            len(all_field_names),
+            len(self.device.available_fields),
             self.device.required_queries,
         )
 
