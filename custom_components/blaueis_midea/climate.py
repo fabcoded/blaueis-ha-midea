@@ -213,7 +213,14 @@ class BlaueisMideaClimate(ClimateEntity):
 
     # ── Commands ────────────────────────────────────────────
 
+    def _check_connected(self) -> None:
+        """Raise if gateway is not connected."""
+        if not self._coord.connected:
+            from homeassistant.exceptions import HomeAssistantError
+            raise HomeAssistantError("Gateway not connected")
+
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        self._check_connected()
         if hvac_mode == HVACMode.OFF:
             await self._device.set(power=False)
         else:
@@ -222,16 +229,19 @@ class BlaueisMideaClimate(ClimateEntity):
                 await self._device.set(power=True, operating_mode=midea_mode)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
+        self._check_connected()
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is not None:
             await self._device.set(target_temperature=temp)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
+        self._check_connected()
         speed = FAN_PRESET_TO_SPEED.get(fan_mode)
         if speed is not None:
             await self._device.set(fan_speed=speed)
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
+        self._check_connected()
         v = swing_mode in ("vertical", "both")
         h = swing_mode in ("horizontal", "both")
         changes = {}
@@ -244,11 +254,10 @@ class BlaueisMideaClimate(ClimateEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set preset — clears all other presets first."""
+        self._check_connected()
         changes = {}
-        # Clear all presets
         for field_name in self._available_presets:
             changes[field_name] = False
-        # Enable the selected one (unless "none")
         if preset_mode != PRESET_NONE:
             target_field = PRESET_NAME_TO_FIELD.get(preset_mode)
             if target_field and target_field in self._available_presets:
@@ -257,7 +266,9 @@ class BlaueisMideaClimate(ClimateEntity):
             await self._device.set(**changes)
 
     async def async_turn_on(self) -> None:
+        self._check_connected()
         await self._device.set(power=True)
 
     async def async_turn_off(self) -> None:
+        self._check_connected()
         await self._device.set(power=False)
