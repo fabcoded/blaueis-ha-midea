@@ -14,7 +14,12 @@ from homeassistant.helpers.entity import DeviceInfo
 
 from blaueis.client.device import Device
 
-from .const import CLIMATE_FIELDS, DOMAIN, FIELD_CLASS_MAP
+from .const import (
+    CLIMATE_CALLBACK_FIELDS,
+    CLIMATE_EXCLUSIVE_FIELDS,
+    DOMAIN,
+    FIELD_CLASS_MAP,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +61,6 @@ class BlaueisMideaCoordinator:
             manufacturer="Midea",
             model="HVAC",
             sw_version=self.device.gateway_info.get("version", "unknown"),
-            # via_device=(DOMAIN, f"{self.host}:{self.port}_gw"),  # TODO: re-enable when platform load order is fixed
         )
 
     @property
@@ -81,7 +85,7 @@ class BlaueisMideaCoordinator:
         await self.device.start()
         self._connected = True
 
-        # Register all available non-climate fields for polling
+        # Register all available fields for polling
         avail = self.device.available_fields
         all_field_names = set(avail.keys())
         self.device.register_fields(all_field_names)
@@ -119,6 +123,7 @@ class BlaueisMideaCoordinator:
         self, field_name: str, new_value: Any, old_value: Any
     ) -> None:
         """Called by Device when a field value changes."""
+        # Notify standalone entity callbacks (switch, sensor, etc.)
         cbs = self._entity_callbacks.get(field_name, set())
         for cb in cbs:
             try:
@@ -127,7 +132,7 @@ class BlaueisMideaCoordinator:
                 _LOGGER.exception("Entity callback error for %s", field_name)
 
         # Climate entity needs to know about changes to its sub-fields
-        if field_name in CLIMATE_FIELDS:
+        if field_name in CLIMATE_CALLBACK_FIELDS:
             for cb in self._entity_callbacks.get("_climate", set()):
                 try:
                     cb()
@@ -155,14 +160,15 @@ class BlaueisMideaCoordinator:
     def get_entities_for_platform(self, platform: str) -> list[dict]:
         """Return list of entity descriptors for a given HA platform.
 
-        Each descriptor: {field_name, field_class, data_type, writable, ...}
-
-        Filters out CLIMATE_FIELDS (handled by climate.py directly) and
-        maps field_class → platform via FIELD_CLASS_MAP.
+        Filters out CLIMATE_EXCLUSIVE_FIELDS (handled by climate.py)
+        and maps field_class → platform via FIELD_CLASS_MAP.
         """
         result = []
         for fname, fmeta in self.device.available_fields.items():
-            if fname in CLIMATE_FIELDS:
+            if fname in CLIMATE_EXCLUSIVE_FIELDS:
+                continue
+            # power is handled by climate on/off — no standalone switch
+            if fname == "power":
                 continue
 
             field_class = fmeta.get("field_class", "")

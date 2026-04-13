@@ -1,8 +1,8 @@
 """Climate entity for Blaueis Midea AC.
 
-Folds operating_mode, target_temperature, and fan_speed into a single
-HA climate entity. Capabilities (available modes, temp ranges, fan presets)
-are derived from B5 capability responses.
+Folds operating_mode, target_temperature, fan_speed, and mutually
+exclusive presets (turbo/eco/sleep/frost) into a single HA climate
+entity. All features are B5-gated — only confirmed capabilities appear.
 """
 
 from __future__ import annotations
@@ -22,15 +22,19 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
 from .const import (
+    CLIMATE_PRESET_FIELDS,
     DOMAIN,
     FAN_PRESET_TO_SPEED,
     FAN_SPEED_TO_PRESET,
     MODE_HA_TO_MIDEA,
     MODE_MIDEA_TO_HA,
+    PRESET_NAME_TO_FIELD,
 )
 from .coordinator import BlaueisMideaCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+PRESET_NONE = "none"
 
 
 async def async_setup_entry(
@@ -58,7 +62,9 @@ class BlaueisMideaClimate(ClimateEntity):
 
         self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_climate"
 
-        # Determine supported features from B5 capabilities
+        avail = self._device.available_fields
+
+        # ── Supported features (B5-gated) ──────────────────
         features = (
             ClimateEntityFeature.TARGET_TEMPERATURE
             | ClimateEntityFeature.FAN_MODE
@@ -66,17 +72,29 @@ class BlaueisMideaClimate(ClimateEntity):
             | ClimateEntityFeature.TURN_OFF
         )
 
-        avail = self._device.available_fields
         if "swing_vertical" in avail:
             features |= ClimateEntityFeature.SWING_MODE
 
+        # ── Presets (B5-gated) ─────────────────────────────
+        self._available_presets: dict[str, str] = {}  # field_name → preset_name
+        for field_name, preset_name in CLIMATE_PRESET_FIELDS.items():
+            if field_name in avail:
+                self._available_presets[field_name] = preset_name
+
+        if self._available_presets:
+            features |= ClimateEntityFeature.PRESET_MODE
+            self._attr_preset_modes = [
+                PRESET_NONE,
+                *self._available_presets.values(),
+            ]
+
         self._attr_supported_features = features
 
-        # Available HVAC modes from B5 constraints
+        # ── HVAC modes (B5-gated) ──────────────────────────
         self._attr_hvac_modes = self._determine_hvac_modes()
         self._attr_fan_modes = list(FAN_PRESET_TO_SPEED.keys())
 
-        # Temperature range from B5 constraints
+        # ── Temperature range (B5 constraints) ─────────────
         temp_meta = avail.get("target_temperature", {})
         constraints = temp_meta.get("active_constraints") or {}
         valid_range = constraints.get("valid_range")
@@ -90,7 +108,7 @@ class BlaueisMideaClimate(ClimateEntity):
         step = constraints.get("step")
         self._attr_target_temperature_step = step if step else 1.0
 
-        # Swing modes
+        # ── Swing modes ────────────────────────────────────
         if features & ClimateEntityFeature.SWING_MODE:
             self._attr_swing_modes = ["off", "vertical"]
             if "swing_horizontal" in avail:
@@ -110,7 +128,6 @@ class BlaueisMideaClimate(ClimateEntity):
                 if ha_mode:
                     modes.append(HVACMode(ha_mode))
         else:
-            # Fallback: assume common modes
             modes.extend([
                 HVACMode.AUTO,
                 HVACMode.COOL,
@@ -124,11 +141,9 @@ class BlaueisMideaClimate(ClimateEntity):
     # ── HA lifecycle ────────────────────────────────────────
 
     async def async_added_to_hass(self) -> None:
-        """Register for state change callbacks."""
         self._coord.register_entity_callback("_climate", self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self) -> None:
-        """Unregister callbacks."""
         self._coord.unregister_entity_callback("_climate", self.async_write_ha_state)
 
     @property
@@ -166,7 +181,6 @@ class BlaueisMideaClimate(ClimateEntity):
         preset = FAN_SPEED_TO_PRESET.get(speed)
         if preset:
             return preset
-        # Unknown speed — return nearest preset rather than an invalid mode
         if speed >= 80:
             return "high"
         if speed >= 60:
@@ -186,6 +200,16 @@ class BlaueisMideaClimate(ClimateEntity):
         if h_on:
             return "horizontal"
         return "off"
+
+    @property
+    def preset_mode(self) -> str | None:
+        """Return the active preset, or 'none'."""
+        if not self._available_presets:
+            return None
+        for field_name, preset_name in self._available_presets.items():
+            if self._device.read(field_name):
+                return preset_name
+        return PRESET_NONE
 
     # ── Commands ────────────────────────────────────────────
 
@@ -215,6 +239,20 @@ class BlaueisMideaClimate(ClimateEntity):
             changes["swing_vertical"] = 0xC if v else 0
         if "swing_horizontal" in self._device.available_fields:
             changes["swing_horizontal"] = 0xC if h else 0
+        if changes:
+            await self._device.set(**changes)
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set preset — clears all other presets first."""
+        changes = {}
+        # Clear all presets
+        for field_name in self._available_presets:
+            changes[field_name] = False
+        # Enable the selected one (unless "none")
+        if preset_mode != PRESET_NONE:
+            target_field = PRESET_NAME_TO_FIELD.get(preset_mode)
+            if target_field and target_field in self._available_presets:
+                changes[target_field] = True
         if changes:
             await self._device.set(**changes)
 
