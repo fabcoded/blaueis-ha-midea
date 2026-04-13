@@ -44,6 +44,10 @@ async def async_setup_entry(
     port = entry.data[CONF_PORT]
     psk = entry.data[CONF_PSK]
 
+    # Pre-load glossary in executor to avoid blocking the event loop
+    from blaueis.core.codec import load_glossary
+    await hass.async_add_executor_job(load_glossary)
+
     coordinator = BlaueisMideaCoordinator(hass, host, port, psk)
     await coordinator.async_start()
 

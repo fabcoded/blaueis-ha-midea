@@ -163,7 +163,15 @@ class BlaueisMideaClimate(ClimateEntity):
         speed = self._device.read("fan_speed")
         if speed is None:
             return None
-        return FAN_SPEED_TO_PRESET.get(speed, f"speed_{speed}")
+        preset = FAN_SPEED_TO_PRESET.get(speed)
+        if preset:
+            return preset
+        # Unknown speed — return nearest preset rather than an invalid mode
+        if speed >= 80:
+            return "high"
+        if speed >= 60:
+            return "medium"
+        return "low"
 
     @property
     def swing_mode(self) -> str | None:

@@ -64,7 +64,10 @@ class BlaueisMideaSelect(SelectEntity):
 
     @property
     def available(self) -> bool:
-        return self._coord.connected
+        if not self._coord.connected:
+            return False
+        power = self._coord.device.read("power")
+        return bool(power)
 
     @property
     def current_option(self) -> str | None:

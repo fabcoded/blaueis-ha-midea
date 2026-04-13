@@ -52,9 +52,17 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
     def device_info(self) -> DeviceInfo:
         return self._coord.device_info
 
+    # Fields that remain valid when AC is off
+    _VALID_WHEN_OFF = frozenset({"in_error"})
+
     @property
     def available(self) -> bool:
-        return self._coord.connected
+        if not self._coord.connected:
+            return False
+        if self._field_name in self._VALID_WHEN_OFF:
+            return True
+        power = self._coord.device.read("power")
+        return bool(power)
 
     @property
     def is_on(self) -> bool | None:

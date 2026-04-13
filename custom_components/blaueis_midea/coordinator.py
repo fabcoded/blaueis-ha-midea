@@ -43,15 +43,33 @@ class BlaueisMideaCoordinator:
         return self._connected
 
     @property
+    def device_name(self) -> str:
+        """AC device name from gateway config."""
+        return self.device.gateway_info.get("device_name", "Midea AC")
+
+    @property
     def device_info(self) -> DeviceInfo:
-        """Device info shared by all entities of this gateway."""
+        """Device info for the AC unit (all AC entities link here)."""
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self.host}:{self.port}")},
-            name=f"Blaueis AC ({self.host})",
+            identifiers={(DOMAIN, f"{self.host}:{self.port}_ac")},
+            name=self.device_name,
             manufacturer="Midea",
             model="HVAC",
-            sw_version=self.device.read("gateway_version") or "unknown",
-            configuration_url=f"ws://{self.host}:{self.port}",
+            sw_version=self.device.gateway_info.get("version", "unknown"),
+            via_device=(DOMAIN, f"{self.host}:{self.port}_gw"),
+        )
+
+    @property
+    def gateway_device_info(self) -> DeviceInfo:
+        """Device info for the gateway Pi (separate device, readonly sensors)."""
+        instance = self.device.gateway_info.get("instance", "")
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self.host}:{self.port}_gw")},
+            name=f"Blaueis Gateway ({instance or self.host})",
+            manufacturer="Blaueis",
+            model="Pi Gateway",
+            sw_version=self.device.gateway_info.get("version", "unknown"),
+            configuration_url=f"http://{self.host}:{self.port}",
         )
 
     async def async_start(self) -> None:
@@ -59,6 +77,7 @@ class BlaueisMideaCoordinator:
         self.device.on_state_change = self._on_device_state_change
         self.device.on_connected = self._on_connected
         self.device.on_disconnected = self._on_disconnected
+        self.device.on_gateway_stats = self._on_gateway_stats
         await self.device.start()
         self._connected = True
 
@@ -114,6 +133,14 @@ class BlaueisMideaCoordinator:
                     cb()
                 except Exception:
                     _LOGGER.exception("Climate callback error for %s", field_name)
+
+    def _on_gateway_stats(self, stats: dict) -> None:
+        """Called by Device when pi_status arrives."""
+        for cb in self._entity_callbacks.get("_gateway", set()):
+            try:
+                cb()
+            except Exception:
+                _LOGGER.exception("Gateway sensor callback error")
 
     def _on_connected(self) -> None:
         self._connected = True

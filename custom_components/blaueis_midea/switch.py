@@ -56,7 +56,11 @@ class BlaueisMideaSwitch(SwitchEntity):
 
     @property
     def available(self) -> bool:
-        return self._coord.connected
+        if not self._coord.connected:
+            return False
+        # Switches are unavailable when AC is off (can't toggle features)
+        power = self._coord.device.read("power")
+        return bool(power)
 
     @property
     def is_on(self) -> bool | None:
