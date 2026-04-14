@@ -48,6 +48,16 @@ _RING_LOGGERS = (
 type BlaueisMideaConfigEntry = ConfigEntry[BlaueisMideaCoordinator]
 
 
+# Glossary field renames that changed unique_ids. Map old → new canonical name.
+# On setup the entity registry is walked and any entity whose unique_id ends in
+# `_<old_name>` is rewritten in place — entity_id, history, and automations are
+# preserved. Entries can stay in this map forever; once no entities match, the
+# migration is a no-op.
+_FIELD_RENAMES: dict[str, str] = {
+    "ptc_heater": "auxiliary_heat_level",
+}
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: BlaueisMideaConfigEntry
 ) -> bool:
@@ -59,6 +69,8 @@ async def async_setup_entry(
     # Pre-load glossary in executor to avoid blocking the event loop
     from blaueis.core.codec import load_glossary
     await hass.async_add_executor_job(load_glossary)
+
+    _migrate_renamed_unique_ids(hass, entry)
 
     debug_ring = _install_debug_ring(entry)
 
@@ -83,6 +95,47 @@ async def async_unload_entry(
         _uninstall_debug_ring(entry)
 
     return unload_ok
+
+
+# ── Field-rename migration ─────────────────────────────────────────────
+
+def _migrate_renamed_unique_ids(
+    hass: HomeAssistant, entry: BlaueisMideaConfigEntry,
+) -> None:
+    """Rewrite entity_registry unique_ids for fields whose canonical name
+    changed in the glossary.
+
+    Unique_ids are of the form ``{host}_{port}_{field_name}``. For every
+    entry in ``_FIELD_RENAMES`` this walks the registry, finds entities
+    whose unique_id ends with ``_<old_name>`` and belongs to this
+    config_entry, and rewrites the tail to ``_<new_name>``. Entity_id,
+    history, and dashboards / automations referencing the entity_id are
+    preserved by HA's registry semantics.
+
+    Safe to run on every setup — idempotent once no old unique_ids remain.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    if not _FIELD_RENAMES:
+        return
+    reg = er.async_get(hass)
+    renamed = 0
+    for ent in list(reg.entities.values()):
+        if ent.config_entry_id != entry.entry_id:
+            continue
+        for old_name, new_name in _FIELD_RENAMES.items():
+            old_suffix = f"_{old_name}"
+            if ent.unique_id.endswith(old_suffix):
+                new_uid = ent.unique_id[: -len(old_suffix)] + f"_{new_name}"
+                reg.async_update_entity(ent.entity_id, new_unique_id=new_uid)
+                _LOGGER.info(
+                    "Migrated unique_id: %s %s → %s",
+                    ent.entity_id, ent.unique_id, new_uid,
+                )
+                renamed += 1
+                break
+    if renamed:
+        _LOGGER.info("Field-rename migration: %d entity ids updated", renamed)
 
 
 # ── DebugRing plumbing ─────────────────────────────────────────────────
