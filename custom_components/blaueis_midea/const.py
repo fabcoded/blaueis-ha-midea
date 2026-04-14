@@ -4,6 +4,11 @@ DOMAIN = "blaueis_midea"
 
 CONF_PSK = "psk"
 
+# Flight-recorder ring size, per-config-entry.
+# See blaueis-libmidea/docs/flight_recorder.md §3.2 — ~35 k records / ~35 min
+# of capture at 10 Hz UART + 5 Hz loop traffic.
+DEBUG_RING_SIZE_MB = 5
+
 # ── Climate preset fields ──────────────────────────────────
 # Mutually exclusive performance/comfort presets.
 # Setting one clears all others. B5-gated: only confirmed fields appear.

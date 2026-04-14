@@ -33,11 +33,13 @@ class BlaueisMideaCoordinator:
         host: str,
         port: int,
         psk: str,
+        debug_ring=None,
     ) -> None:
         self.hass = hass
         self.host = host
         self.port = port
         self._psk = psk
+        self.debug_ring = debug_ring
 
         self.device = Device(host, port, psk=psk)
         self._entity_callbacks: dict[str, set] = {}  # field_name → {callback, ...}
