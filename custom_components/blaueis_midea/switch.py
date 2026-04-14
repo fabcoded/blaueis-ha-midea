@@ -10,6 +10,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._ux_mixin import field_ux_available
 from .coordinator import BlaueisMideaCoordinator
 
 
@@ -44,10 +45,16 @@ class BlaueisMideaSwitch(SwitchEntity):
         self._coord.register_entity_callback(
             self._field_name, self.async_write_ha_state
         )
+        self._coord.register_entity_callback(
+            "operating_mode", self.async_write_ha_state
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         self._coord.unregister_entity_callback(
             self._field_name, self.async_write_ha_state
+        )
+        self._coord.unregister_entity_callback(
+            "operating_mode", self.async_write_ha_state
         )
 
     @property
@@ -56,7 +63,7 @@ class BlaueisMideaSwitch(SwitchEntity):
 
     @property
     def available(self) -> bool:
-        if not self._coord.connected:
+        if not field_ux_available(self._coord, self._field_name):
             return False
         # Switches are unavailable when AC is off (can't toggle features)
         power = self._coord.device.read("power")

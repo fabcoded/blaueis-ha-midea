@@ -8,6 +8,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._ux_mixin import field_ux_available
 from .coordinator import BlaueisMideaCoordinator
 
 
@@ -42,10 +43,16 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
         self._coord.register_entity_callback(
             self._field_name, self.async_write_ha_state
         )
+        self._coord.register_entity_callback(
+            "operating_mode", self.async_write_ha_state
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         self._coord.unregister_entity_callback(
             self._field_name, self.async_write_ha_state
+        )
+        self._coord.unregister_entity_callback(
+            "operating_mode", self.async_write_ha_state
         )
 
     @property
@@ -57,7 +64,7 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
 
     @property
     def available(self) -> bool:
-        if not self._coord.connected:
+        if not field_ux_available(self._coord, self._field_name):
             return False
         if self._field_name in self._VALID_WHEN_OFF:
             return True

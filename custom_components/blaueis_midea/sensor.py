@@ -9,6 +9,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._ux_mixin import field_ux_available
 from .const import DOMAIN
 from .coordinator import BlaueisMideaCoordinator
 
@@ -80,10 +81,18 @@ class BlaueisMideaSensor(SensorEntity):
         self._coord.register_entity_callback(
             self._field_name, self.async_write_ha_state
         )
+        # Refresh `available` whenever the mode changes — UX mask may flip
+        # even when our own field's value is unchanged.
+        self._coord.register_entity_callback(
+            "operating_mode", self.async_write_ha_state
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         self._coord.unregister_entity_callback(
             self._field_name, self.async_write_ha_state
+        )
+        self._coord.unregister_entity_callback(
+            "operating_mode", self.async_write_ha_state
         )
 
     @property
@@ -92,7 +101,7 @@ class BlaueisMideaSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        return self._coord.connected
+        return field_ux_available(self._coord, self._field_name)
 
     @property
     def native_value(self):
