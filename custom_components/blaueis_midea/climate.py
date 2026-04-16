@@ -241,14 +241,18 @@ class BlaueisMideaClimate(ClimateEntity):
             await self._device.set(fan_speed=speed)
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
+        # Glossary raw values — codec masks to field bit width before placing
+        # in the byte. Previous 0xC was the already-shifted in-byte pattern,
+        # which the codec then re-masked down to 0 (= OFF). Confirmed on the
+        # wire: raw 3 puts 0b11 into bits[3:2] of body[7] → 0x0C → ON.
         self._check_connected()
         v = swing_mode in ("vertical", "both")
         h = swing_mode in ("horizontal", "both")
         changes = {}
         if "swing_vertical" in self._device.available_fields:
-            changes["swing_vertical"] = 0xC if v else 0
+            changes["swing_vertical"] = 3 if v else 0
         if "swing_horizontal" in self._device.available_fields:
-            changes["swing_horizontal"] = 0xC if h else 0
+            changes["swing_horizontal"] = 3 if h else 0
         if changes:
             await self._device.set(**changes)
 

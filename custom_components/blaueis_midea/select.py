@@ -1,8 +1,18 @@
-"""Select entities — auto-mapped from glossary stateful_enum (writable)."""
+"""Select entities — auto-mapped from glossary stateful_enum (writable).
+
+Options are the glossary's value *names* (e.g. "center", "left_mid", "low"),
+not the raw integers. Name→raw and raw→name mappings are resolved from the
+field's `values:` block. If the device echoes a raw value that isn't in the
+exact name→raw table, the entity snaps to the nearest user-selectable raw on
+display so the dropdown always shows a valid option — preserves the glossary's
+"device is authority" principle while giving HA a clean state to render.
+
+Per-value flag `user_selectable: false` hides a value from the user-facing
+options list (while still mapping it on read). Used for e.g. vane-angle raw 0
+("released"), which only the AC itself sets.
+"""
 
 from __future__ import annotations
-
-from typing import Any
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
@@ -41,13 +51,42 @@ class BlaueisMideaSelect(SelectEntity):
         )
         self._attr_name = self._field_name.replace("_", " ").title()
 
-        # Build options from active constraints if available
+        # Build the name↔raw maps from the glossary `values:` block. Each
+        # entry's `user_selectable: false` flag (default true) excludes it
+        # from the HA options list but keeps the raw→name mapping for reads.
+        gdef = coordinator.device.field_gdef(self._field_name) or {}
+        values = gdef.get("values") or {}
+
+        self._name_to_raw: dict[str, int] = {}
+        self._raw_to_name: dict[int, str] = {}
+        user_options: list[str] = []
+        for name, vdef in values.items():
+            if not isinstance(vdef, dict):
+                continue
+            raw = vdef.get("raw")
+            if raw is None:
+                continue
+            self._name_to_raw[name] = raw
+            # Earlier entries win on raw collisions — preserves declaration order
+            self._raw_to_name.setdefault(raw, name)
+            if vdef.get("user_selectable", True):
+                user_options.append(name)
+
+        # Legacy fallback: capability.default.valid_set as a list of raws
         constraints = desc.get("active_constraints") or {}
         valid_set = constraints.get("valid_set")
-        if valid_set:
-            self._attr_options = [str(v) for v in valid_set]
-        else:
-            self._attr_options = []
+        if not user_options and valid_set:
+            user_options = [str(v) for v in valid_set]
+            for v in valid_set:
+                try:
+                    self._name_to_raw.setdefault(str(v), int(v))
+                except (TypeError, ValueError):
+                    pass
+
+        self._attr_options = user_options
+        self._user_selectable_raws = sorted(
+            {self._name_to_raw[n] for n in user_options if n in self._name_to_raw}
+        )
 
     async def async_added_to_hass(self) -> None:
         self._coord.register_entity_callback(
@@ -78,13 +117,41 @@ class BlaueisMideaSelect(SelectEntity):
 
     @property
     def current_option(self) -> str | None:
+        """Translate the field's raw value → an option the user sees.
+
+        1. Exact match in raw→name table → return that name (even for
+           non-user-selectable ones, so HA doesn't flag it as "unknown").
+        2. No exact match → snap to the nearest user-selectable raw and
+           return its name. Preserves the invariant that the dropdown
+           always has a valid selected entry even when the AC reports
+           an off-grid intermediate value (e.g. mid-motion, or an external
+           controller set 23 instead of 25).
+        3. No user-selectable raws at all → str(val) as a last-resort label.
+        """
         val = self._coord.device.read(self._field_name)
-        return str(val) if val is not None else None
+        if val is None:
+            return None
+        if val in self._raw_to_name:
+            return self._raw_to_name[val]
+        if not self._user_selectable_raws:
+            return str(val)
+        try:
+            nearest = min(self._user_selectable_raws, key=lambda r: abs(r - val))
+        except TypeError:
+            return str(val)
+        return self._raw_to_name.get(nearest)
 
     async def async_select_option(self, option: str) -> None:
-        # Try to convert back to int if the original was numeric
-        try:
-            value = int(option)
-        except ValueError:
-            value = option
+        # User picked an option name — translate to raw via the glossary map.
+        # Only user-selectable options appear in the dropdown, so a non-
+        # mapping option string is almost certainly a caller bug, but we
+        # fall back to int-parse for backward compatibility with any
+        # dashboard config that used raw values as the option string.
+        if option in self._name_to_raw:
+            value: int | str = self._name_to_raw[option]
+        else:
+            try:
+                value = int(option)
+            except ValueError:
+                value = option
         await self._coord.device.set(**{self._field_name: value})

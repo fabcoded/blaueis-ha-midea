@@ -3311,14 +3311,18 @@ fields:
         default:
           description: 'Pre-B5: assume horizontal swing selectable (off / on)'
           valid_set:
-          - false
-          - true
+          - 0
+          - 3
           correction: snap_nearest
           note: 'Permissive default applied at boot — assume both axes
 
             available. Replaced once B5 cap 0x15 reveals which axes
 
             the device actually supports (ud_only / both / lr_only).
+
+            Raw values 0 / 3 are the 2-bit enum encoding from the
+
+            field-level `values:` block.
 
             '
         values:
@@ -3406,14 +3410,20 @@ fields:
         default:
           description: 'Pre-B5: assume vertical swing selectable (off / on)'
           valid_set:
-          - false
-          - true
+          - 0
+          - 3
           correction: snap_nearest
           note: 'Permissive default applied at boot — assume both axes
 
             available. Replaced once B5 cap 0x15 reveals which axes
 
-            the device actually supports.
+            the device actually supports. Raw values 0 / 3 are the 2-bit
+
+            enum encoding (off / on) from the field-level `values:` block;
+
+            previously this listed Python booleans which produced broken
+
+            HA select options "False"/"True".
 
             '
         values:
@@ -4082,8 +4092,10 @@ fields:
         internally routed to 0x32 with value 0x02.
       confidence: hypothesis
     wind_swing_lr_angle:
-      description: 'Horizontal (left-right) vane angle position. Values are percentage-based positions: 0=fixed, 1/25/50/75/100
-        map to 5 physical positions. 50 = center. Sent via B0 property 0x0A.'
+      description: 'Horizontal (left-right) vane angle position. 5 user-selectable
+        positions (raw 1 / 25 / 50 / 75 / 100) plus raw 0 (backend-only "released"
+        — AC sets this to release the vane when a pattern mode like swing takes
+        over; not user-selectable). Sent via B0 property 0x0A.'
       field_class: stateful_enum
       data_type: uint8
       device_context: indoor_unit
@@ -4094,22 +4106,23 @@ fields:
       values:
         'off':
           raw: 0
-          description: Fixed position (no swing)
-        pos_1:
+          user_selectable: false
+          description: Released — AC controls vane (pattern mode, swing, or power off). Only the AC sets this.
+        left:
           raw: 1
-          description: Position 1 — far left (1%)
-        pos_2:
+          description: Far left (1%)
+        left_mid:
           raw: 25
-          description: Position 2 — left (25%)
+          description: Left of centre (25%)
         center:
           raw: 50
-          description: Center position (50%)
-        pos_4:
+          description: Centre (50%)
+        right_mid:
           raw: 75
-          description: Position 4 — right (75%)
-        pos_5:
+          description: Right of centre (75%)
+        right:
           raw: 100
-          description: Position 5 — far right (100%)
+          description: Far right (100%)
       protocols:
         cmd_0xb0:
           frame: 0xB0 Property Set
@@ -4166,8 +4179,10 @@ fields:
       - Session 1 B5 query
       - midea-msmart device/AC SwingAngle enum
     wind_swing_ud_angle:
-      description: 'Vertical (up-down) vane angle position. Same percentage-based encoding as wind_swing_lr_angle: 0=fixed,
-        1/25/50/75/100 = 5 positions. 50 = center. Sent via B0 property 0x09.'
+      description: 'Vertical (up-down) vane angle position. 5 user-selectable
+        positions (raw 1 / 25 / 50 / 75 / 100) plus raw 0 (backend-only "released"
+        — AC sets this to release the vane when a pattern mode like swing takes
+        over; not user-selectable). Sent via B0 property 0x09.'
       field_class: stateful_enum
       data_type: uint8
       device_context: indoor_unit
@@ -4178,22 +4193,23 @@ fields:
       values:
         'off':
           raw: 0
-          description: Fixed position (no swing)
-        pos_1:
+          user_selectable: false
+          description: Released — AC controls vane (pattern mode, swing, or power off). Only the AC sets this.
+        up:
           raw: 1
-          description: Position 1 — highest (1%)
-        pos_2:
+          description: Highest / top (1%)
+        up_mid:
           raw: 25
-          description: Position 2 — high (25%)
+          description: Above centre (25%)
         center:
           raw: 50
-          description: Center position (50%)
-        pos_4:
+          description: Centre (50%)
+        down_mid:
           raw: 75
-          description: Position 4 — low (75%)
-        pos_5:
+          description: Below centre (75%)
+        down:
           raw: 100
-          description: Position 5 — lowest (100%)
+          description: Lowest / bottom (100%)
       protocols:
         cmd_0xb0:
           frame: 0xB0 Property Set

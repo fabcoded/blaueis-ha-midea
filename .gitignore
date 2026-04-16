@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+
+# Frontend test scaffolding (Playwright + npm) — tied to phase-2 card
+# prototype work that isn't shipped with the integration. Never commit.
+frontend/tests/
+node_modules/
+package-lock.json
