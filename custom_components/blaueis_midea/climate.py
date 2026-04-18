@@ -16,14 +16,14 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._set_result import check_set_result
 from .const import (
     CLIMATE_PRESET_FIELDS,
-    DOMAIN,
     FAN_PRESET_TO_SPEED,
     FAN_SPEED_TO_PRESET,
     MODE_HA_TO_MIDEA,
@@ -92,7 +92,35 @@ class BlaueisMideaClimate(ClimateEntity):
 
         # ── HVAC modes (B5-gated) ──────────────────────────
         self._attr_hvac_modes = self._determine_hvac_modes()
-        self._attr_fan_modes = list(FAN_PRESET_TO_SPEED.keys())
+
+        # ── Fan modes (derived from active cap 0x10) ──────
+        fan_meta = avail.get("fan_speed", {})
+        fan_ac = fan_meta.get("active_constraints") or {}
+        cap_values = fan_ac.get("values") or {}
+        self._fan_name_to_raw: dict[str, int] = {}
+        self._fan_raw_to_name: dict[int, str] = {}
+        for key, vdef in cap_values.items():
+            raw = vdef.get("raw") if isinstance(vdef, dict) else None
+            if raw is None:
+                continue
+            display = vdef.get("label", key) if isinstance(vdef, dict) else key
+            self._fan_name_to_raw[display] = raw
+            self._fan_raw_to_name.setdefault(raw, display)
+        custom_vdef = fan_ac.get("custom_value")
+        self._fan_custom_label: str | None = (
+            custom_vdef.get("label") if isinstance(custom_vdef, dict) else None
+        )
+        if self._fan_name_to_raw:
+            modes = list(self._fan_name_to_raw.keys())
+            if self._fan_custom_label:
+                modes.append(self._fan_custom_label)
+            self._attr_fan_modes = modes
+        else:
+            # Pre-B5 fallback
+            self._attr_fan_modes = list(FAN_PRESET_TO_SPEED.keys())
+            self._fan_name_to_raw = dict(FAN_PRESET_TO_SPEED)
+            self._fan_raw_to_name = dict(FAN_SPEED_TO_PRESET)
+            self._fan_custom_label = None
 
         # ── Temperature range (B5 constraints) ─────────────
         temp_meta = avail.get("target_temperature", {})
@@ -178,14 +206,10 @@ class BlaueisMideaClimate(ClimateEntity):
         speed = self._device.read("fan_speed")
         if speed is None:
             return None
-        preset = FAN_SPEED_TO_PRESET.get(speed)
-        if preset:
-            return preset
-        if speed >= 80:
-            return "high"
-        if speed >= 60:
-            return "medium"
-        return "low"
+        name = self._fan_raw_to_name.get(speed)
+        if name is None and self._fan_custom_label:
+            return self._fan_custom_label
+        return name
 
     @property
     def swing_mode(self) -> str | None:
@@ -222,23 +246,29 @@ class BlaueisMideaClimate(ClimateEntity):
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         self._check_connected()
         if hvac_mode == HVACMode.OFF:
-            await self._device.set(power=False)
+            result = await self._device.set(power=False)
+            check_set_result(result, primary_fields={"power"})
         else:
             midea_mode = MODE_HA_TO_MIDEA.get(hvac_mode.value)
             if midea_mode is not None:
-                await self._device.set(power=True, operating_mode=midea_mode)
+                result = await self._device.set(power=True, operating_mode=midea_mode)
+                check_set_result(result, primary_fields={"power", "operating_mode"})
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         self._check_connected()
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is not None:
-            await self._device.set(target_temperature=temp)
+            result = await self._device.set(target_temperature=temp)
+            check_set_result(result, primary_fields={"target_temperature"})
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         self._check_connected()
-        speed = FAN_PRESET_TO_SPEED.get(fan_mode)
+        if fan_mode == self._fan_custom_label:
+            fan_mode = "Auto"
+        speed = self._fan_name_to_raw.get(fan_mode)
         if speed is not None:
-            await self._device.set(fan_speed=speed)
+            result = await self._device.set(fan_speed=speed)
+            check_set_result(result, primary_fields={"fan_speed"})
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         # Glossary raw values — codec masks to field bit width before placing
@@ -254,25 +284,31 @@ class BlaueisMideaClimate(ClimateEntity):
         if "swing_horizontal" in self._device.available_fields:
             changes["swing_horizontal"] = 3 if h else 0
         if changes:
-            await self._device.set(**changes)
+            result = await self._device.set(**changes)
+            check_set_result(result, primary_fields=set(changes))
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set preset — clears all other presets first."""
         self._check_connected()
         changes = {}
+        primary: set[str] = set()
         for field_name in self._available_presets:
             changes[field_name] = False
         if preset_mode != PRESET_NONE:
             target_field = PRESET_NAME_TO_FIELD.get(preset_mode)
             if target_field and target_field in self._available_presets:
                 changes[target_field] = True
+                primary.add(target_field)
         if changes:
-            await self._device.set(**changes)
+            result = await self._device.set(**changes)
+            check_set_result(result, primary_fields=primary)
 
     async def async_turn_on(self) -> None:
         self._check_connected()
-        await self._device.set(power=True)
+        result = await self._device.set(power=True)
+        check_set_result(result, primary_fields={"power"})
 
     async def async_turn_off(self) -> None:
         self._check_connected()
-        await self._device.set(power=False)
+        result = await self._device.set(power=False)
+        check_set_result(result, primary_fields={"power"})

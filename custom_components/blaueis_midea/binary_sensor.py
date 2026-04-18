@@ -39,6 +39,14 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
         )
         self._attr_name = self._field_name.replace("_", " ").title()
 
+        gdef = coordinator.device.field_gdef(self._field_name) or {}
+        ha_meta = gdef.get("ha") or {}
+        if "entity_category" in ha_meta:
+            from homeassistant.helpers.entity import EntityCategory
+            self._attr_entity_category = EntityCategory(ha_meta["entity_category"])
+        if ha_meta.get("enabled_default") is False:
+            self._attr_entity_registry_enabled_default = False
+
     async def async_added_to_hass(self) -> None:
         self._coord.register_entity_callback(
             self._field_name, self.async_write_ha_state

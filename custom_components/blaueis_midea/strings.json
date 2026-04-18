@@ -18,5 +18,20 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Follow Me Function",
+        "description": "Configure the Follow Me Function. The AC uses the selected sensor instead of its built-in thermistor. Guards disable Follow Me when readings are out of range.",
+        "data": {
+          "follow_me_function_enabled": "Enable Follow Me Function",
+          "follow_me_function_sensor": "Temperature sensor",
+          "follow_me_function_guard_temp_min": "Minimum temperature guard (\u00b0C)",
+          "follow_me_function_guard_temp_max": "Maximum temperature guard (\u00b0C)",
+          "follow_me_function_safety_timeout": "Sensor timeout (seconds)"
+        }
+      }
+    }
   }
 }

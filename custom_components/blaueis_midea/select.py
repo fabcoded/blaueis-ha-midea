@@ -20,6 +20,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._set_result import check_set_result
 from ._ux_mixin import field_ux_available
 from .coordinator import BlaueisMideaCoordinator
 
@@ -49,28 +50,34 @@ class BlaueisMideaSelect(SelectEntity):
         self._attr_unique_id = (
             f"{coordinator.host}_{coordinator.port}_{self._field_name}"
         )
-        self._attr_name = self._field_name.replace("_", " ").title()
-
-        # Build the name↔raw maps from the glossary `values:` block. Each
-        # entry's `user_selectable: false` flag (default true) excludes it
-        # from the HA options list but keeps the raw→name mapping for reads.
         gdef = coordinator.device.field_gdef(self._field_name) or {}
+        self._attr_name = gdef.get("label") or self._field_name.replace("_", " ").title()
+
+        ha_meta = gdef.get("ha") or {}
+        if ha_meta.get("enabled_default") is False:
+            self._attr_entity_registry_enabled_default = False
+
+        # Build the label↔raw maps from the glossary `values:` block. Each
+        # entry's `user_selectable: false` flag (default true) excludes it
+        # from the HA options list but keeps the raw→label mapping for reads.
+        # `label:` overrides the YAML key as the user-visible option string.
         values = gdef.get("values") or {}
 
         self._name_to_raw: dict[str, int] = {}
         self._raw_to_name: dict[int, str] = {}
         user_options: list[str] = []
-        for name, vdef in values.items():
+        for key, vdef in values.items():
             if not isinstance(vdef, dict):
                 continue
             raw = vdef.get("raw")
             if raw is None:
                 continue
-            self._name_to_raw[name] = raw
+            display = vdef.get("label", key)
+            self._name_to_raw[display] = raw
             # Earlier entries win on raw collisions — preserves declaration order
-            self._raw_to_name.setdefault(raw, name)
+            self._raw_to_name.setdefault(raw, display)
             if vdef.get("user_selectable", True):
-                user_options.append(name)
+                user_options.append(display)
 
         # Legacy fallback: capability.default.valid_set as a list of raws
         constraints = desc.get("active_constraints") or {}
@@ -154,4 +161,5 @@ class BlaueisMideaSelect(SelectEntity):
                 value = int(option)
             except ValueError:
                 value = option
-        await self._coord.device.set(**{self._field_name: value})
+        result = await self._coord.device.set(**{self._field_name: value})
+        check_set_result(result, primary_fields={self._field_name})

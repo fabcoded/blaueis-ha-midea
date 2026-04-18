@@ -10,7 +10,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
 from ._ux_mixin import field_ux_available
-from .const import DOMAIN
 from .coordinator import BlaueisMideaCoordinator
 
 # Fields that remain valid when AC is off (whitelist).
@@ -71,11 +70,34 @@ class BlaueisMideaSensor(SensorEntity):
         )
         self._attr_name = self._field_name.replace("_", " ").title()
 
-        # Device class and unit from mapping
-        dc_info = SENSOR_DEVICE_CLASS.get(self._field_name)
-        if dc_info:
-            self._attr_device_class = dc_info[0]
-            self._attr_native_unit_of_measurement = dc_info[1]
+        # HA entity metadata (device_class, state_class, unit, precision) comes
+        # from the glossary's per-field `ha:` block when present — declarative
+        # path. Falls back to the hardcoded SENSOR_DEVICE_CLASS map for the
+        # fields that haven't been migrated yet; that map will shrink to empty
+        # as glossary entries gain their `ha:` blocks.
+        gdef = coordinator.device.field_gdef(self._field_name) or {}
+        ha_meta = gdef.get("ha") or {}
+        if "device_class" in ha_meta:
+            self._attr_device_class = ha_meta["device_class"]
+        if "state_class" in ha_meta:
+            self._attr_state_class = ha_meta["state_class"]
+        if "unit_of_measurement" in ha_meta:
+            self._attr_native_unit_of_measurement = ha_meta["unit_of_measurement"]
+        if "suggested_display_precision" in ha_meta:
+            self._attr_suggested_display_precision = ha_meta["suggested_display_precision"]
+        if "entity_category" in ha_meta:
+            from homeassistant.helpers.entity import EntityCategory
+            self._attr_entity_category = EntityCategory(ha_meta["entity_category"])
+        if ha_meta.get("enabled_default") is False:
+            self._attr_entity_registry_enabled_default = False
+
+        # Legacy hardcoded fallback (only kicks in for fields without an `ha:`
+        # block in glossary). Delete once all measurement sensors migrated.
+        if not ha_meta:
+            dc_info = SENSOR_DEVICE_CLASS.get(self._field_name)
+            if dc_info:
+                self._attr_device_class = dc_info[0]
+                self._attr_native_unit_of_measurement = dc_info[1]
 
     async def async_added_to_hass(self) -> None:
         self._coord.register_entity_callback(

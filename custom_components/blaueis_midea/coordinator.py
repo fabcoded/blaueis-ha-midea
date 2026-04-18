@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 
 from blaueis.client.device import Device
@@ -20,6 +20,7 @@ from .const import (
     DOMAIN,
     FIELD_CLASS_MAP,
 )
+from .follow_me import BlauiesFollowMeManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class BlaueisMideaCoordinator:
         self.device = Device(host, port, psk=psk)
         self._entity_callbacks: dict[str, set] = {}  # field_name → {callback, ...}
         self._connected = False
+        self.blaueis_follow_me = BlauiesFollowMeManager(hass, self)
 
     @property
     def connected(self) -> bool:
@@ -94,7 +96,9 @@ class BlaueisMideaCoordinator:
         )
 
     async def async_stop(self) -> None:
-        """Stop the Device."""
+        """Stop the Device and Follow Me manager."""
+        if self.blaueis_follow_me.active or self.blaueis_follow_me._stopping:
+            await self.blaueis_follow_me.async_stop()
         await self.device.stop()
         self._connected = False
 
@@ -113,6 +117,14 @@ class BlaueisMideaCoordinator:
         cbs = self._entity_callbacks.get(field_name)
         if cbs:
             cbs.discard(callback_fn)
+
+    def fire_entity_callbacks(self, field_name: str) -> None:
+        """Manually fire all callbacks registered for a field."""
+        for cb in self._entity_callbacks.get(field_name, set()):
+            try:
+                cb()
+            except Exception:
+                _LOGGER.exception("Entity callback error for %s", field_name)
 
     # ── Device callbacks ────────────────────────────────────
 

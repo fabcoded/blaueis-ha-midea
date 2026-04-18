@@ -10,9 +10,18 @@ import voluptuous as vol
 
 from homeassistant import config_entries, exceptions
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import selector
 
-from .const import CONF_PSK, DOMAIN
+from .const import (
+    CONF_FMF_ENABLED,
+    CONF_FMF_GUARD_TEMP_MAX,
+    CONF_FMF_GUARD_TEMP_MIN,
+    CONF_FMF_SAFETY_TIMEOUT,
+    CONF_FMF_SENSOR,
+    CONF_PSK,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +71,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> OptionsFlowHandler:
+        return OptionsFlowHandler(config_entry)
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
@@ -86,6 +102,51 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user", data_schema=DATA_SCHEMA, errors=errors
         )
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Options flow — configure Follow Me Function."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        opts = self._config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_FMF_ENABLED,
+                    default=opts.get(CONF_FMF_ENABLED, False),
+                ): bool,
+                vol.Optional(
+                    CONF_FMF_SENSOR,
+                    default=opts.get(CONF_FMF_SENSOR, ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor",
+                        device_class="temperature",
+                    )
+                ),
+                vol.Optional(
+                    CONF_FMF_GUARD_TEMP_MIN,
+                    default=opts.get(CONF_FMF_GUARD_TEMP_MIN, -15.0),
+                ): vol.All(vol.Coerce(float), vol.Range(min=-40, max=10)),
+                vol.Optional(
+                    CONF_FMF_GUARD_TEMP_MAX,
+                    default=opts.get(CONF_FMF_GUARD_TEMP_MAX, 40.0),
+                ): vol.All(vol.Coerce(float), vol.Range(min=25, max=50)),
+                vol.Optional(
+                    CONF_FMF_SAFETY_TIMEOUT,
+                    default=opts.get(CONF_FMF_SAFETY_TIMEOUT, 300),
+                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
 
 
 class CannotConnect(exceptions.HomeAssistantError):

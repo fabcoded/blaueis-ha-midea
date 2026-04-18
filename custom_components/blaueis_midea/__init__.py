@@ -16,12 +16,19 @@ _LIB = str(Path(__file__).parent / "lib")
 if _LIB not in sys.path:
     sys.path.insert(0, _LIB)
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PORT, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry  # noqa: E402
+from homeassistant.const import CONF_HOST, CONF_PORT, Platform  # noqa: E402
+from homeassistant.core import HomeAssistant  # noqa: E402
 
-from .const import CONF_PSK, DEBUG_RING_SIZE_MB, DOMAIN
-from .coordinator import BlaueisMideaCoordinator
+from .const import (  # noqa: E402
+    CONF_FMF_ENGAGED,
+    CONF_FMF_ENABLED,
+    CONF_FMF_SENSOR,
+    CONF_PSK,
+    DEBUG_RING_SIZE_MB,
+    DOMAIN as DOMAIN,
+)
+from .coordinator import BlaueisMideaCoordinator  # noqa: E402
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +38,7 @@ PLATFORMS = [
     Platform.SWITCH,
     Platform.BINARY_SENSOR,
     Platform.SELECT,
+    Platform.NUMBER,
 ]
 
 # Loggers attached to the per-entry DebugRing. Keeping the list explicit (not
@@ -79,8 +87,45 @@ async def async_setup_entry(
 
     entry.runtime_data = coordinator
 
+    fm = coordinator.blaueis_follow_me
+    fm.configure_guards(entry.options)
+    enabled = entry.options.get(CONF_FMF_ENABLED, False)
+    armed = entry.options.get(CONF_FMF_ENGAGED, False)
+    source = entry.options.get(CONF_FMF_SENSOR)
+    if enabled and armed and source:
+        try:
+            await fm.async_start(source)
+        except Exception:
+            _LOGGER.warning("Follow Me Function auto-start failed")
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
+
+
+async def _async_options_updated(
+    hass: HomeAssistant, entry: BlaueisMideaConfigEntry
+) -> None:
+    """Reconcile Follow Me Function desired state with runtime state."""
+    coordinator: BlaueisMideaCoordinator = entry.runtime_data
+    enabled = entry.options.get(CONF_FMF_ENABLED, False)
+    armed = entry.options.get(CONF_FMF_ENGAGED, False)
+    source = entry.options.get(CONF_FMF_SENSOR)
+    fm = coordinator.blaueis_follow_me
+
+    if enabled and armed and source:
+        fm.configure_guards(entry.options)
+        if fm.active:
+            if fm.source_entity_id != source:
+                await fm.async_stop()
+                await fm.async_start(source)
+        else:
+            await fm.async_start(source)
+    else:
+        if fm.active or fm._stopping:
+            await fm.async_stop()
+
+    coordinator.fire_entity_callbacks("follow_me")
 
 
 async def async_unload_entry(

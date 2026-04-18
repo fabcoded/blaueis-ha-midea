@@ -55,7 +55,16 @@ FIELD_CLASS_MAP = {
     "stateful_enum":       ("select",     "sensor"),
     "stateful_numeric":    ("number",     "sensor"),
     "sensor":              (None,         "sensor"),
+    "binary_sensor":       ("binary_sensor", "binary_sensor"),
 }
+
+# ── Follow Me Function config options ─────────────────────
+CONF_FMF_ENGAGED          = "follow_me_function_armed"
+CONF_FMF_ENABLED        = "follow_me_function_enabled"
+CONF_FMF_GUARD_TEMP_MAX = "follow_me_function_guard_temp_max"
+CONF_FMF_GUARD_TEMP_MIN = "follow_me_function_guard_temp_min"
+CONF_FMF_SAFETY_TIMEOUT = "follow_me_function_safety_timeout"
+CONF_FMF_SENSOR         = "follow_me_function_sensor"
 
 # ── Midea operating_mode enum → HA HVACMode ────────────────
 MODE_MIDEA_TO_HA = {
