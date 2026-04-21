@@ -72,6 +72,10 @@ type BlaueisMideaConfigEntry = ConfigEntry[BlaueisMideaCoordinator]
 # migration is a no-op.
 _FIELD_RENAMES: dict[str, str] = {
     "ptc_heater": "auxiliary_heat_level",
+    "total_power_kwh": "power_total_kwh",
+    "total_run_power_kwh": "power_total_run_kwh",
+    "current_run_power_kwh": "power_current_run_kwh",
+    "realtime_power_kw": "power_realtime_kw",
 }
 
 
