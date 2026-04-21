@@ -14,7 +14,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import BlaueisMideaConfigEntry
 from ._set_result import check_set_result
 from ._ux_mixin import field_ux_available
-from .const import CONF_FMF_ENGAGED, CONF_FMF_ENABLED, CONF_FMF_SENSOR
+from .const import (
+    CONF_FMF_ENABLED,
+    CONF_FMF_ENGAGED,
+    CONF_FMF_SENSOR,
+)
 from .coordinator import BlaueisMideaCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,7 +32,7 @@ async def async_setup_entry(
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
     entities: list[SwitchEntity] = []
     for desc in coordinator.get_entities_for_platform("switch"):
-        entities.append(BlaueisMideaSwitch(coordinator, desc))
+        entities.append(BlaueisMideaSwitch(coordinator, entry, desc))
 
     entities.append(BlauiesFollowMeSwitch(coordinator, entry))
 
@@ -41,8 +45,14 @@ class BlaueisMideaSwitch(SwitchEntity):
     _attr_has_entity_name = True
     should_poll = False
 
-    def __init__(self, coordinator: BlaueisMideaCoordinator, desc: dict) -> None:
+    def __init__(
+        self,
+        coordinator: BlaueisMideaCoordinator,
+        entry: BlaueisMideaConfigEntry,
+        desc: dict,
+    ) -> None:
         self._coord = coordinator
+        self._entry = entry
         self._field_name = desc["field_name"]
         self._attr_unique_id = (
             f"{coordinator.host}_{coordinator.port}_{self._field_name}"
@@ -78,7 +88,6 @@ class BlaueisMideaSwitch(SwitchEntity):
     def available(self) -> bool:
         if not field_ux_available(self._coord, self._field_name):
             return False
-        # Switches are unavailable when AC is off (can't toggle features)
         power = self._coord.device.read("power")
         return bool(power)
 

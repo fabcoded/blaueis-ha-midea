@@ -36,11 +36,11 @@ cp -r _tmp/custom_components/blaueis_midea ./
 rm -rf _tmp
 ```
 
-Or via HAOS SSH (see `../../AGENTS.md` §"Home Assistant access"):
+Or via HAOS SSH — the "Advanced SSH & Web Terminal" add-on (root@host, port 22):
 
 ```sh
-scp -r custom_components/blaueis_midea \
-    root@192.168.210.25:/config/custom_components/
+scp -i <ssh-key> -r custom_components/blaueis_midea \
+    root@<ha-host>:/config/custom_components/
 ```
 
 Restart HA (`ha core restart` — manifest + Python files are picked up at startup).
@@ -51,7 +51,7 @@ Restart HA (`ha core restart` — manifest + Python files are picked up at start
 
 1. **Settings → Devices & Services → Add Integration → Blaueis Midea AC**.
 2. Fill in:
-   - **Host** — gateway IP (e.g. `192.168.210.30`).
+   - **Host** — gateway IP or mDNS hostname (e.g. `gateway.local`).
    - **Port** — default `8765`.
    - **PSK** — the gateway's shared key (from `/etc/blaueis-gw/instances/<name>.yaml:psk`).
 3. The config flow tests TCP + the full crypto handshake before accepting. Failure → `cannot_connect`; check the gateway is running and the PSK matches.
@@ -73,7 +73,7 @@ Entities are **B5-gated** — only capabilities the device explicitly advertises
 | `binary_sensor` | `stateful_bool` | — | ✓ |
 | `select` | `stateful_enum` | ✓ | — |
 | `sensor` | `stateful_enum`, `stateful_numeric`, `sensor` | — | ✓ |
-| `number` | `stateful_numeric` | ✓ (future) | — |
+| `number` | `stateful_numeric` (slider in `active_constraints`) | ✓ | — |
 
 Source: `const.py:FIELD_CLASS_MAP`.
 
@@ -161,21 +161,26 @@ Two flavours, pick by what you changed.
 | Any `.py` in vendored `lib/blaueis/**` | `ha core restart` | Same |
 | New platform added (e.g. adding `number.py`) | `ha core restart` | Same |
 
-The token-driven API shortcut (avoids UI round-trip, useful for scripted debugging):
+A long-lived HA access token (keep it in a local, gitignored file — or
+export via `HA_TOKEN` in your shell) lets you drive runtime operations
+without a Python reload. Scripted shortcut:
 
 ```sh
-TOKEN=$(cat ~/ha.token)
+TOKEN=$(cat <ha-token-file>)       # or: TOKEN=$HA_TOKEN
 ENTRY_ID=$(curl -s -H "Authorization: Bearer $TOKEN" \
-  http://192.168.210.25:8123/api/config/config_entries/entry \
+  http://<ha-host>:8123/api/config/config_entries/entry \
   | jq -r '.[] | select(.domain=="blaueis_midea").entry_id')
 
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  http://192.168.210.25:8123/api/services/homeassistant/reload_config_entry \
+  http://<ha-host>:8123/api/services/homeassistant/reload_config_entry \
   -d "{\"entry_id\": \"$ENTRY_ID\"}"
 ```
 
-(Full context + when-which-mechanism in the workspace `AGENTS.md` under "Home Assistant access".)
+**Rule of thumb:** Python file changes need `ha core restart`. Anything
+else (config, YAML, state, service calls) is token-driven via the REST
+API. Avoiding unnecessary restarts matters — HA takes 30–60s to come
+back and interrupts every other integration.
 
 ---
 
@@ -183,9 +188,9 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ### 7.1 `cannot_connect` on config flow
 
-- Gateway not running: `ssh hvac@192.168.210.30 sudo systemctl status blaueis-gateway@atelier`.
+- Gateway not running: `ssh hvac@<gateway-host> sudo systemctl status blaueis-gateway@<instance>`.
 - PSK mismatch: crypto handshake fails silently on the wire — check journal for `HandshakeError`.
-- Firewall: `nc -zv 192.168.210.30 8765` from HA host.
+- Firewall: `nc -zv <gateway-host> 8765` from the HA host.
 - Wrong port: default is `8765`.
 
 ### 7.2 Integration loads but no entities appear

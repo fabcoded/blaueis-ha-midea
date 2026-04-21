@@ -16,6 +16,7 @@ import pytest
 _HA_MODULES = [
     "homeassistant",
     "homeassistant.components",
+    "homeassistant.components.select",
     "homeassistant.components.switch",
     "homeassistant.config_entries",
     "homeassistant.const",
@@ -36,6 +37,20 @@ class _HomeAssistantError(Exception):
     pass
 
 sys.modules["homeassistant.exceptions"].HomeAssistantError = _HomeAssistantError
+
+
+# Entity base classes must be real `object` subclasses so @property decorators
+# on our subclass aren't shadowed by MagicMock attribute auto-creation.
+class _RealSelectEntity:
+    _attr_options: list = []
+
+
+class _RealSwitchEntity:
+    pass
+
+
+sys.modules["homeassistant.components.select"].SelectEntity = _RealSelectEntity
+sys.modules["homeassistant.components.switch"].SwitchEntity = _RealSwitchEntity
 
 
 class FakeState:

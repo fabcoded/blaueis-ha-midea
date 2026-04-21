@@ -1,0 +1,68 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Blaueis Gateway",
+                "description": "Connect to a Blaueis HVAC gateway running on your network.",
+                "data": {
+                    "host": "[%key:common::config_flow::data::host%]",
+                    "port": "[%key:common::config_flow::data::port%]",
+                    "psk": "Pre-shared key (passphrase)"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+            "unknown": "[%key:common::config_flow::error::unknown%]"
+        },
+        "abort": {
+            "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Blaueis Midea AC",
+                "description": "Configure Follow Me, Display & Buzzer mode default, and (Advanced) glossary overrides. {override_error}",
+                "data": {
+                    "follow_me_function_enabled": "Enable Follow Me Function",
+                    "follow_me_function_sensor": "Temperature sensor",
+                    "follow_me_function_guard_temp_min": "Minimum temperature guard (\u00b0C)",
+                    "follow_me_function_guard_temp_max": "Maximum temperature guard (\u00b0C)",
+                    "follow_me_function_safety_timeout": "Sensor timeout (seconds)",
+                    "display_buzzer_mode": "Display & Buzzer mode",
+                    "glossary_overrides_yaml": "Advanced \u2014 Glossary overrides (YAML)"
+                },
+                "data_description": {
+                    "display_buzzer_mode": "Controls the AC display LED and, by extension, the buzzer. Non-enforced lets you control the display freely; Forced modes keep the display in the selected state and the integration re-asserts it if the remote changes it.",
+                    "glossary_overrides_yaml": "Developer / debugging only \u2014 leave empty for normal operation. See the integration README for the override format and examples."
+                }
+            }
+        },
+        "error": {
+            "invalid_override": "Invalid glossary override \u2014 see message in description above."
+        }
+    },
+    "selector": {
+        "display_buzzer_mode": {
+            "options": {
+                "non_enforced": "Follow device (no enforcement)",
+                "forced_on": "Forced on (display always on, audible)",
+                "forced_off": "Forced off (display always off, silent)"
+            }
+        }
+    },
+    "entity": {
+        "select": {
+            "display_buzzer_mode": {
+                "name": "Display & Buzzer mode",
+                "state": {
+                    "on": "On",
+                    "off": "Off",
+                    "forced_on": "Forced on",
+                    "forced_off": "Forced off"
+                }
+            }
+        }
+    }
+}

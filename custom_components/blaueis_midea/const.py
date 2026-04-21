@@ -85,3 +85,83 @@ DEFAULT_FAN_PRESETS = {
 }
 FAN_PRESET_TO_SPEED = DEFAULT_FAN_PRESETS
 FAN_SPEED_TO_PRESET = {v: k for k, v in DEFAULT_FAN_PRESETS.items()}
+
+# ── Display & Buzzer mode (Finding 07 §4.8 / §4.9) ────────
+# The AC's display-LED latch globally gates the indoor-unit buzzer:
+# cmd_0xb0 writes are silent while the latch is OFF. The model exposes
+# a single select to the user that covers both "policy" and "immediate
+# state": one widget, no split between switch.screen_display and a
+# separate mode select.
+#
+#   stored policy (config entry):
+#     - non_enforced (default) — no enforcer, user drives on/off directly
+#     - forced_on            — enforcer keeps display ON
+#     - forced_off           — enforcer keeps display OFF
+#
+#   entity options (what the user sees):
+#     - on         — non-enforced, current state is ON  (picking it sends
+#                    one toggle if currently OFF)
+#     - off        — non-enforced, current state is OFF (picking it sends
+#                    one toggle if currently ON)
+#     - forced_on  — forced ON, enforcer active
+#     - forced_off — forced OFF, enforcer active
+#
+# When the stored policy is non_enforced, current_option mirrors live
+# state so picking `on`/`off` writes only when there's drift.
+
+CONF_DISPLAY_BUZZER_MODE = "display_buzzer_mode"
+
+# Glossary override — multiline YAML text entered in the Configure
+# dialog's Advanced section. Stored verbatim (string), parsed on
+# every entry load. See ``_glossary_override.py`` for validation.
+CONF_GLOSSARY_OVERRIDES = "glossary_overrides_yaml"
+
+# Synthetic-entity → required-cap-field map.
+#
+# Used by ``_cleanup_orphaned_field_entities`` to extend the
+# pattern-based field-entity sweep to entities whose unique_id suffix
+# is NOT a glossary field name (so the field-name check skips them)
+# but which still depend on one or more glossary fields being in
+# ``available_fields`` to make sense.
+#
+# The key is the unique_id suffix (after ``{host}_{port}_``); the
+# value is the set of glossary field names the entity needs. If ANY of
+# the required fields is missing from ``available_fields``, the entity
+# is removed from the HA registry on next setup. Empty set means "no
+# cap dependency, never auto-remove".
+SYNTHETIC_ENTITY_CAP_DEPENDENCIES: dict[str, set[str]] = {
+    "display_buzzer_mode": {"screen_display"},
+    "blaueis_follow_me": set(),  # always-available; no cap gate
+}
+
+# Stored policy keys (persisted in config entry options).
+DISPLAY_BUZZER_POLICY_NON_ENFORCED = "non_enforced"
+DISPLAY_BUZZER_POLICY_FORCED_ON = "forced_on"
+DISPLAY_BUZZER_POLICY_FORCED_OFF = "forced_off"
+DISPLAY_BUZZER_POLICIES = (
+    DISPLAY_BUZZER_POLICY_NON_ENFORCED,
+    DISPLAY_BUZZER_POLICY_FORCED_ON,
+    DISPLAY_BUZZER_POLICY_FORCED_OFF,
+)
+DISPLAY_BUZZER_MODE_DEFAULT = DISPLAY_BUZZER_POLICY_NON_ENFORCED
+
+# Entity-visible options.
+DISPLAY_BUZZER_OPTION_ON = "on"
+DISPLAY_BUZZER_OPTION_OFF = "off"
+DISPLAY_BUZZER_OPTION_FORCED_ON = DISPLAY_BUZZER_POLICY_FORCED_ON
+DISPLAY_BUZZER_OPTION_FORCED_OFF = DISPLAY_BUZZER_POLICY_FORCED_OFF
+DISPLAY_BUZZER_OPTIONS = (
+    DISPLAY_BUZZER_OPTION_ON,
+    DISPLAY_BUZZER_OPTION_OFF,
+    DISPLAY_BUZZER_OPTION_FORCED_ON,
+    DISPLAY_BUZZER_OPTION_FORCED_OFF,
+)
+
+# Legacy-key migration map, applied once on config-entry load.
+# Earlier installs used `auto`/`permanent_on`/`permanent_off` as the
+# stored mode. These map 1:1 to the new policy keys.
+DISPLAY_BUZZER_LEGACY_MIGRATION = {
+    "auto": DISPLAY_BUZZER_POLICY_NON_ENFORCED,
+    "permanent_on": DISPLAY_BUZZER_POLICY_FORCED_ON,
+    "permanent_off": DISPLAY_BUZZER_POLICY_FORCED_OFF,
+}

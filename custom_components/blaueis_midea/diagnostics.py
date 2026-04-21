@@ -19,7 +19,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_PSK
+from .const import CONF_GLOSSARY_OVERRIDES, CONF_PSK
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +53,11 @@ async def async_get_config_entry_diagnostics(
     if client is not None and getattr(client, "gw_session", None) is not None:
         session_dict = dataclasses.asdict(client.gw_session)
 
+    # Glossary override snapshot — raw user YAML text + the affected
+    # leaf paths the override produced. Tiny payload, useful for bug
+    # reports and offline diffs against an unmodified glossary.
+    glossary_override = _glossary_override_section(entry, coordinator)
+
     data: dict[str, Any] = {
         "entry": {
             "title": entry.title,
@@ -61,12 +66,44 @@ async def async_get_config_entry_diagnostics(
         },
         "gateway_info": dict(getattr(coordinator.device, "gateway_info", {})),
         "gateway_session": session_dict,
+        "glossary_override": glossary_override,
+        "available_fields": list(coordinator.device.available_fields.keys()),
         "local_ring": local_meta,
         "gateway_ring": gateway_meta,
         "combined_records": combined,
     }
 
     return async_redact_data(data, _TO_REDACT)
+
+
+def _glossary_override_section(
+    entry: ConfigEntry, coordinator,
+) -> dict[str, Any]:
+    """Build the diagnostics block for the device's glossary override.
+
+    Always present (even when no override is set) so consumers can rely
+    on a fixed shape:
+
+    - ``yaml``: the raw user-supplied text (empty string if unset).
+    - ``affected_paths``: dotted paths of leaves the override changed
+      in the merged glossary view (empty list if no override).
+    - ``meta``: cached integer count, used for quick sanity checks.
+
+    The full merged glossary is intentionally NOT included by default —
+    it's a few hundred KB and is mostly identical to the un-overridden
+    base. Use the in-app "View merged glossary" menu (G9) for a scoped
+    on-screen view, or run the override locally to reconstruct it.
+    """
+    yaml_text = entry.options.get(CONF_GLOSSARY_OVERRIDES, "") or ""
+    affected = list(getattr(coordinator.device, "glossary_override_affected", []))
+    return {
+        "yaml": yaml_text,
+        "affected_paths": affected,
+        "meta": {
+            "yaml_bytes": len(yaml_text),
+            "affected_count": len(affected),
+        },
+    }
 
 
 async def _pull_gateway_ring(coordinator) -> tuple[list[dict], dict]:
