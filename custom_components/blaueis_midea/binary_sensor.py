@@ -47,6 +47,11 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
         if ha_meta.get("enabled_default") is False:
             self._attr_entity_registry_enabled_default = False
 
+        off_behavior = ha_meta.get("off_behavior", "hide")
+        if off_behavior not in ("hide", "available"):
+            off_behavior = "hide"
+        self._off_behavior = off_behavior
+
     async def async_added_to_hass(self) -> None:
         self._coord.register_entity_callback(
             self._field_name, self.async_write_ha_state
@@ -67,14 +72,11 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
     def device_info(self) -> DeviceInfo:
         return self._coord.device_info
 
-    # Fields that remain valid when AC is off
-    _VALID_WHEN_OFF = frozenset({"in_error"})
-
     @property
     def available(self) -> bool:
         if not field_ux_available(self._coord, self._field_name):
             return False
-        if self._field_name in self._VALID_WHEN_OFF:
+        if self._off_behavior == "available":
             return True
         power = self._coord.device.read("power")
         return bool(power)

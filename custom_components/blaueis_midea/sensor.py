@@ -12,13 +12,13 @@ from . import BlaueisMideaConfigEntry
 from ._ux_mixin import field_ux_available
 from .coordinator import BlaueisMideaCoordinator
 
-# Fields that remain valid when AC is off (whitelist).
-# Everything else returns None when power=False.
-VALID_WHEN_OFF = frozenset({
-    "indoor_temperature",
-    "error_code",
-    "in_error",
-})
+# Per-field power-off read policy, resolved from the glossary's ha.off_behavior
+# key. "hide" (the default) masks the value to None when power=off, matching
+# the legacy hardcoded whitelist. "available" returns the device's reported
+# value regardless of power state — for fields that remain meaningful or
+# carry latched values while the unit is in standby (thermistors, error
+# codes, cumulative counters, instantaneous power).
+OFF_BEHAVIORS = frozenset({"hide", "available"})
 
 # Map glossary field names to HA sensor device classes and units
 SENSOR_DEVICE_CLASS = {
@@ -91,12 +91,19 @@ class BlaueisMideaSensor(SensorEntity):
         if ha_meta.get("enabled_default") is False:
             self._attr_entity_registry_enabled_default = False
 
-        # Legacy hardcoded fallback (only kicks in for fields without an `ha:`
-        # block in glossary). Delete once all measurement sensors migrated.
-        if not ha_meta:
-            dc_info = SENSOR_DEVICE_CLASS.get(self._field_name)
-            if dc_info:
+        off_behavior = ha_meta.get("off_behavior", "hide")
+        if off_behavior not in OFF_BEHAVIORS:
+            off_behavior = "hide"
+        self._off_behavior = off_behavior
+
+        # Legacy hardcoded fallback — kicks in per-attribute when the glossary's
+        # `ha:` block doesn't declare it. Delete once all measurement sensors
+        # have their device_class / unit migrated into the glossary.
+        dc_info = SENSOR_DEVICE_CLASS.get(self._field_name)
+        if dc_info:
+            if "device_class" not in ha_meta:
                 self._attr_device_class = dc_info[0]
+            if "unit_of_measurement" not in ha_meta:
                 self._attr_native_unit_of_measurement = dc_info[1]
 
     async def async_added_to_hass(self) -> None:
@@ -128,11 +135,8 @@ class BlaueisMideaSensor(SensorEntity):
     @property
     def native_value(self):
         value = self._coord.device.read(self._field_name)
-        # Mask sensor values when AC is off (most report garbage/stale data)
-        if self._field_name not in VALID_WHEN_OFF:
-            power = self._coord.device.read("power")
-            if not power:
-                return None
+        if self._off_behavior == "hide" and not self._coord.device.read("power"):
+            return None
         return value
 
 
