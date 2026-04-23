@@ -48,6 +48,7 @@ PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.SELECT,
     Platform.NUMBER,
+    Platform.BUTTON,
 ]
 
 # Loggers attached to the per-entry DebugRing. Keeping the list explicit (not
@@ -136,6 +137,11 @@ async def async_setup_entry(
     # firmware repair) without per-field bespoke migration code.
     _cleanup_orphaned_field_entities(hass, entry, coordinator)
 
+    # Register the field-inventory service + HTTP view (global,
+    # registered on first entry setup; no-op on subsequent entries).
+    from .field_inventory import async_setup_field_inventory
+    await async_setup_field_inventory(hass, entry)
+
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
 
@@ -194,6 +200,9 @@ async def async_unload_entry(
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        # Unlink any outstanding inventory tempfiles for this entry.
+        from .field_inventory import async_teardown_field_inventory
+        await async_teardown_field_inventory(hass, entry)
         await coordinator.async_stop()
         _uninstall_debug_ring(entry)
 
