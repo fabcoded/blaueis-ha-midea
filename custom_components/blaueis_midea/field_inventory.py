@@ -1,4 +1,4 @@
-"""Field-inventory HA integration — service + download view + tempfile lifecycle.
+"""Field-inventory HA integration — service + in-memory download view.
 
 End-to-end user journey:
 
@@ -16,20 +16,23 @@ End-to-end user journey:
 5. Handler builds the markdown report + JSON sidecar + suggested
    override YAML snippets entirely in memory via the core-library
    functions.
-6. The two files land in :func:`tempfile.NamedTemporaryFile` under the
-   OS tempdir. ``delete=False`` so the handle closes without removing
-   the file — the HTTP view unlinks it after serving.
-7. Two :class:`HomeAssistantView` instances register under
-   ``/api/blaueis_midea/inventory/<uuid>.{md,json}``, each backed by
-   its tempfile.
-8. A persistent notification fires with the download URLs. Tap →
-   browser downloads → view unlinks the file → subsequent GETs return
-   410 Gone.
+6. Output bytes land in an :class:`InventoryBlob` (pure RAM —
+   ``contents["md"] / ["json"] / ["compare.md"]`` = bytes). The blob
+   is keyed by a fresh uuid4 in the per-entry
+   :class:`InventoryDownloadRegistry`. No tempfile, no ``/tmp``
+   juggling, no HAOS container path gotchas, no event-loop blocking
+   I/O warnings — the filesystem is never touched.
+7. One :class:`HomeAssistantView` serves
+   ``/api/blaueis_midea/inventory/<uuid>/<ext>`` — reads from
+   ``blob.contents[ext]`` and immediately sets it to ``None`` so the
+   same ext can't be downloaded twice (subsequent GETs return 410
+   Gone). Different exts on the same blob stay downloadable
+   independently until consumed.
+8. A persistent notification fires with the download URLs.
 9. A ``hass.async_call_later(900, cleanup)`` task fires 15 min later
-   as a belt-and-braces TTL: any tempfile still on disk gets unlinked
-   and its view deregistered. An unload-entry hook cleans up
-   outstanding tempfiles immediately when the integration is
-   reloaded.
+   as the TTL: ``registry.drop(blob_id)`` releases the bytes for GC.
+   An unload-entry hook clears the whole registry immediately when
+   the integration is reloaded.
 
 The core decoding + classification + override-synthesis logic lives
 in ``blaueis.core.inventory`` — this module is purely orchestration.
@@ -40,16 +43,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import tempfile
 import time
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from aiohttp import web
+from homeassistant.components import persistent_notification
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.event import async_call_later
@@ -61,6 +62,7 @@ from blaueis.core.codec import (
 from blaueis.core.inventory import (
     CLASS_POPULATED,
     ShadowDecoder,
+    _load_glossary_schema,
     generate_compare_report,
     generate_json_sidecar,
     generate_markdown_report,
@@ -197,55 +199,10 @@ def _build_scan_query_list(
 # ══════════════════════════════════════════════════════════════════════════
 
 
-class InventoryDownloadView(HomeAssistantView):
-    """Serves one inventory tempfile and unlinks it after the first GET.
-
-    URL: ``/api/blaueis_midea/inventory/<uuid>/<ext>`` where ext is ``md``
-    or ``json``. After a successful download, the backing file is
-    unlinked from disk and further GETs return 410 Gone until the
-    enclosing ``InventoryDownloadRegistry`` entry is removed entirely.
-    """
-
-    url = "/api/blaueis_midea/inventory/{blob_id}/{ext}"
-    name = "api:blaueis_midea:inventory"
-    requires_auth = True
-
-    def __init__(self, registry: "InventoryDownloadRegistry") -> None:
-        self._registry = registry
-
-    async def get(self, request, blob_id: str, ext: str) -> web.Response:
-        entry = self._registry.get(blob_id)
-        if entry is None:
-            return web.Response(status=404, text="inventory blob not found or expired")
-        path = entry.paths.get(ext)
-        if path is None:
-            return web.Response(status=404, text=f"inventory blob has no {ext} file")
-        if not path.exists():
-            # Already consumed — 410 Gone.
-            return web.Response(status=410, text="inventory file already downloaded")
-        content_type = "text/markdown" if ext == "md" else "application/json"
-        try:
-            body = await _read_tempfile(path)
-        except FileNotFoundError:
-            return web.Response(status=410, text="inventory file gone")
-        # Unlink after reading; protect against race with cleanup.
-        try:
-            os.unlink(path)
-        except FileNotFoundError:
-            pass
-        return web.Response(
-            body=body,
-            content_type=content_type,
-            headers={
-                "Content-Disposition": f'attachment; filename="{blob_id}.{ext}"',
-            },
-        )
-
-
-async def _read_tempfile(path: Path) -> bytes:
-    """Read a tempfile via an executor to keep the event loop responsive."""
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, path.read_bytes)
+# The active HTTP view is defined further down as
+# :class:`_MultiEntryInventoryView` — multi-entry lookup across all
+# config entries' inventory registries. Kept minimal and in-memory:
+# blob contents live as bytes in ``InventoryBlob.contents``, no disk.
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -255,28 +212,35 @@ async def _read_tempfile(path: Path) -> bytes:
 
 @dataclass
 class InventoryBlob:
-    """One inventory result with download tempfiles + in-memory snapshot."""
+    """One inventory result held entirely in RAM.
+
+    ``contents`` maps ``"md"`` / ``"json"`` / ``"compare.md"`` to the
+    raw bytes of that download. After a GET consumes an entry, the
+    corresponding value is set to ``None`` — subsequent GETs on that
+    ext return 410 Gone while other exts remain downloadable.
+    """
 
     blob_id: str
     label: str
     timestamp: float
-    paths: dict[str, Path] = field(default_factory=dict)  # {"md": Path, "json": Path}
-    snapshot_json: dict | None = None  # full JSON content, kept in RAM for compares
+    contents: dict[str, bytes | None] = field(default_factory=dict)
+    snapshot_json: dict | None = None  # full JSON, kept for compare-mode
 
 
 class InventoryDownloadRegistry:
     """Per-config-entry registry of active inventory blobs.
 
-    Lives on ``entry.runtime_data.inventory_registry``. Holds up to
-    :data:`_SNAPSHOT_REGISTRY_MAX` JSON snapshots for compare-mode and
-    any number of currently-downloadable tempfile-backed blobs.
+    Pure in-memory — no filesystem. Blobs are typically ~30 KB each
+    (markdown + JSON). The 15-min TTL plus single-use semantics cap
+    live memory at a handful of blobs; a recent-5 compare-mode FIFO
+    holds JSON snapshots independent of the download lifecycle.
     """
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
         self._blobs: dict[str, InventoryBlob] = {}
         # Separate FIFO of snapshot-only entries (for compare-mode
-        # lookup after the tempfiles have been unlinked).
+        # lookup after the blob's downloads have been consumed).
         self._snapshots: dict[str, dict] = {}
         self._snapshot_order: list[str] = []
 
@@ -299,24 +263,15 @@ class InventoryDownloadRegistry:
         self._blobs.pop(blob_id, None)
 
     def cleanup_blob(self, blob_id: str) -> None:
-        """Unlink any remaining tempfiles for a blob and drop it from
-        the active registry. Snapshot (if any) stays in the FIFO until
-        aged out — that's intentional for compare-mode continuity.
+        """Drop a blob from the active registry. No filesystem cleanup
+        needed — contents are just bytes in RAM; letting the blob go
+        out of scope frees them. Snapshot (if any) stays in the FIFO
+        until aged out — that's intentional for compare-mode continuity.
         """
-        blob = self._blobs.pop(blob_id, None)
-        if blob is None:
-            return
-        for path in blob.paths.values():
-            try:
-                os.unlink(path)
-            except FileNotFoundError:
-                pass
-            except Exception as e:  # pragma: no cover — OS permission errors
-                _LOGGER.debug("cleanup: couldn't unlink %s: %s", path, e)
+        self._blobs.pop(blob_id, None)
 
     def cleanup_all(self) -> None:
-        for blob_id in list(self._blobs):
-            self.cleanup_blob(blob_id)
+        self._blobs.clear()
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -333,6 +288,12 @@ async def async_setup_field_inventory(
     globally; per-entry state lives on ``entry.runtime_data``.
     """
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
+
+    # Warm the glossary-schema cache off-loop — synthesize_override_snippet()
+    # loads it synchronously the first time, and HA's event-loop watchdog
+    # flags that as a blocking open() in an async context. Doing it here
+    # via the executor avoids that every scan.
+    await hass.async_add_executor_job(_load_glossary_schema)
 
     # Per-entry download registry.
     registry = InventoryDownloadRegistry(hass)
@@ -405,24 +366,25 @@ class _MultiEntryInventoryView(HomeAssistantView):
             blob = registry.get(blob_id)
             if blob is None:
                 continue
-            path = blob.paths.get(ext)
-            if path is None:
-                return web.Response(status=404, text=f"no {ext} file for blob")
-            if not path.exists():
+            if ext not in blob.contents:
+                return web.Response(
+                    status=404, text=f"inventory blob has no {ext} file"
+                )
+            body = blob.contents[ext]
+            if body is None:
                 return web.Response(
                     status=410, text="inventory file already downloaded"
                 )
-            try:
-                body = await _read_tempfile(path)
-            except FileNotFoundError:
-                return web.Response(status=410, text="inventory file gone")
-            try:
-                os.unlink(path)
-            except FileNotFoundError:
-                pass
+            # Single-use: consume the bytes.
+            blob.contents[ext] = None
+            content_type = {
+                "md": "text/markdown",
+                "json": "application/json",
+                "compare.md": "text/markdown",
+            }.get(ext, "application/octet-stream")
             return web.Response(
                 body=body,
-                content_type="text/markdown" if ext == "md" else "application/json",
+                content_type=content_type,
                 headers={
                     "Content-Disposition": f'attachment; filename="{blob_id}.{ext}"',
                 },
@@ -480,6 +442,8 @@ async def _run_inventory_scan(
     registry: InventoryDownloadRegistry = coordinator.inventory_registry  # type: ignore[attr-defined]
     device = coordinator.device
 
+    _LOGGER.info("field_inventory: scan start — label=%s", label)
+
     try:
         glossary = device._glossary  # type: ignore[attr-defined]
         shadow = ShadowDecoder(glossary)
@@ -517,6 +481,11 @@ async def _run_inventory_scan(
         )
 
         snap = shadow.snapshot(cap_records=cap_records)
+        _LOGGER.info(
+            "field_inventory: shadow snapshot — %d populated, %d observations",
+            sum(1 for s in snap.states.values() if s.classification == CLASS_POPULATED),
+            len(snap.observations),
+        )
 
         suggested = []
         if suggest_overrides:
@@ -532,6 +501,9 @@ async def _run_inventory_scan(
                 )
                 if snip is not None:
                     suggested.append(snip)
+            _LOGGER.warning(
+                "field_inventory: synthesized %d override snippets", len(suggested)
+            )
 
         host = entry.data.get("host")
         md = generate_markdown_report(
@@ -539,6 +511,11 @@ async def _run_inventory_scan(
         )
         js = generate_json_sidecar(
             snap, glossary, label=label, host=host, suggested_overrides=suggested
+        )
+        _LOGGER.warning(
+            "field_inventory: reports built (md=%d chars, json=%d fields)",
+            len(md),
+            len(js.get("fields", {})),
         )
 
         # Optional compare.
@@ -553,29 +530,43 @@ async def _run_inventory_scan(
             else:
                 cmp_md = generate_compare_report(prev_js, js)
 
-        # Build + register tempfiles.
-        blob = await _persist_blob(hass, label, md, js, cmp_md, registry)
+        # Build in-memory blob + register for download.
+        blob = _build_blob(label, md, js, cmp_md, registry)
+        _LOGGER.warning(
+            "field_inventory: blob %s ready (contents=%s, md=%d B, json=%d B)",
+            blob.blob_id,
+            list(blob.contents.keys()),
+            len(blob.contents.get("md") or b""),
+            len(blob.contents.get("json") or b""),
+        )
 
         # Notification.
         notification_msg = _build_notification(blob, host)
-        hass.components.persistent_notification.async_create(
-            message=notification_msg,
+        persistent_notification.async_create(
+            hass,
+            notification_msg,
             title=f"Field inventory: {label}",
             notification_id=f"blaueis_midea_inventory_{blob.blob_id}",
+        )
+        _LOGGER.warning(
+            "field_inventory: notification posted for blob %s", blob.blob_id
         )
 
         # TTL cleanup.
         async def _ttl_cleanup(_now: Any) -> None:
             registry.cleanup_blob(blob.blob_id)
-            _LOGGER.info("field_inventory: TTL expired, cleaned blob %s", blob.blob_id)
+            _LOGGER.warning(
+                "field_inventory: TTL expired, cleaned blob %s", blob.blob_id
+            )
 
         async_call_later(hass, _DOWNLOAD_TTL_SECONDS, _ttl_cleanup)
 
     except Exception:
         _LOGGER.exception("field_inventory: scan failed")
         try:
-            hass.components.persistent_notification.async_create(
-                message=(
+            persistent_notification.async_create(
+                hass,
+                (
                     f"Field inventory (`{label}`) failed — see Home Assistant log for "
                     "details."
                 ),
@@ -586,48 +577,27 @@ async def _run_inventory_scan(
             pass
 
 
-async def _persist_blob(
-    hass: HomeAssistant,
+def _build_blob(
     label: str,
     md: str,
     js: dict,
     cmp_md: str | None,
     registry: InventoryDownloadRegistry,
 ) -> InventoryBlob:
-    """Write markdown + JSON (+ optional compare) to tempfiles and
-    register them under a fresh blob_id."""
+    """Build an in-memory blob carrying the markdown + JSON + optional
+    compare-report bytes, register it, return it. No filesystem I/O."""
     blob_id = uuid.uuid4().hex
-    paths: dict[str, Path] = {}
-
-    def _write_tempfile(ext: str, data: bytes) -> Path:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            delete=False,
-            prefix=f"blaueis_inventory_{blob_id}_",
-            suffix=f".{ext}",
-        ) as tf:
-            tf.write(data)
-            return Path(tf.name)
-
-    # Offload file I/O to the executor.
-    paths["md"] = await hass.async_add_executor_job(
-        _write_tempfile, "md", md.encode("utf-8")
-    )
-    paths["json"] = await hass.async_add_executor_job(
-        _write_tempfile,
-        "json",
-        json.dumps(js, indent=2, default=str).encode("utf-8"),
-    )
+    contents: dict[str, bytes | None] = {
+        "md": md.encode("utf-8"),
+        "json": json.dumps(js, indent=2, default=str).encode("utf-8"),
+    }
     if cmp_md is not None:
-        paths["compare.md"] = await hass.async_add_executor_job(
-            _write_tempfile, "compare.md", cmp_md.encode("utf-8")
-        )
-
+        contents["compare.md"] = cmp_md.encode("utf-8")
     blob = InventoryBlob(
         blob_id=blob_id,
         label=label,
         timestamp=time.time(),
-        paths=paths,
+        contents=contents,
         snapshot_json=js,
     )
     registry.add(blob)
@@ -644,7 +614,7 @@ def _build_notification(blob: InventoryBlob, host: str | None) -> str:
         f"- [Download markdown report]({base}/{blob.blob_id}/md)\n"
         f"- [Download JSON sidecar]({base}/{blob.blob_id}/json)\n"
     )
-    if "compare.md" in blob.paths:
+    if "compare.md" in blob.contents:
         msg += f"- [Download compare report]({base}/{blob.blob_id}/compare.md)\n"
     msg += (
         f"\nLinks expire in 15 min or after first download. "
