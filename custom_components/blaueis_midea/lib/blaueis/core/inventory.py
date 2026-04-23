@@ -239,10 +239,7 @@ def pick_variant(variants: list[Variant], field_def: dict) -> tuple[Variant | No
         return meaningful[0], False
 
     # Constrain to "real" variants: has encoding, not marked never.
-    candidates = [
-        v for v in meaningful
-        if v.encoding and v.feature_available != "never"
-    ]
+    candidates = [v for v in meaningful if v.encoding and v.feature_available != "never"]
 
     # Range-based filter if the glossary declares bounds.
     rng = field_def.get("range")
@@ -404,15 +401,10 @@ def _contains_field(subtree: dict, field_name: str) -> bool:
         node = subtree[field_name]
         if isinstance(node, dict) and "data_type" in node:
             return True
-    return any(
-        isinstance(value, dict) and _contains_field(value, field_name)
-        for value in subtree.values()
-    )
+    return any(isinstance(value, dict) and _contains_field(value, field_name) for value in subtree.values())
 
 
-def _matched_cap_value_name(
-    cap_def: dict, cap_records: list[dict] | None
-) -> str | None:
+def _matched_cap_value_name(cap_def: dict, cap_records: list[dict] | None) -> str | None:
     """Return the name of the ``capability.values`` entry whose ``raw``
     matches the actual cap byte reported by the device, or ``None`` if
     the cap isn't present in the B5 response.
@@ -446,6 +438,7 @@ class OverrideSnippet:
     reason: str  # human-readable "why this is hidden today"
     picked_variant: Variant | None
     is_guessed: bool  # True when the encoding choice wasn't firmly discriminated
+    picked_value: Any  # effective value being claimed: variant value for cap-fields, direct value otherwise
     ha_metadata: dict[str, Any]
     override_dict: dict  # the override as a nested dict, schema-validatable
     yaml_text: str  # the same override rendered as YAML, ready to paste
@@ -458,17 +451,25 @@ def synthesize_override_snippet(
     body: bytes,
     glossary: dict,
     cap_records: list[dict] | None,
+    current_value: Any = None,
 ) -> OverrideSnippet | None:
     """Build a copy-paste-ready glossary-override snippet for a single
     populated-but-hidden field, or ``None`` if no snippet is warranted.
 
+    ``current_value`` is the caller's decoded value for the field in
+    the current scan (from :class:`FieldState.value`). For non-cap
+    fields, this is the effective value the override unlocks; if it
+    is ``None`` or zero the snippet is skipped (nothing meaningful
+    to unlock). For cap-dependent fields, the value is taken from
+    the picked variant instead.
+
     Returns ``None`` when:
       - field's ``feature_available`` is already ``always`` / ``readable``
         (nothing to unlock);
-      - no cap-value entry matches the device's reported cap byte AND the
-        field is cap-gated (fallback field-level override would be guessed
-        territory);
-      - the multi-variant decoder produced no usable variant;
+      - field is cap-dependent and the multi-variant decoder produced
+        no usable variant;
+      - field is *not* cap-dependent and ``current_value`` is ``None``
+        or zero (no real data to unlock);
       - the generated YAML fails schema validation (caller logs + drops).
 
     Callers should pair this with :func:`classify`-based filtering so
@@ -492,10 +493,18 @@ def synthesize_override_snippet(
     variants: list[Variant] = []
     picked: Variant | None = None
     is_guessed = False
+    effective_value: Any = current_value
     if is_cap_dependent:
         variants = decode_variants(field_name, field_def, protocol_key, body, glossary)
         picked, is_guessed = pick_variant(variants, field_def)
         if picked is None or picked.encoding is None:
+            return None
+        effective_value = picked.value
+    else:
+        # Non-cap-dependent field: skip if there's no meaningful current
+        # value. Stops us from emitting snippets that would unlock a
+        # field the device never populates anyway.
+        if effective_value in (None, 0, 0.0, False, ""):
             return None
 
     matched_name = _matched_cap_value_name(cap_def, cap_records)
@@ -554,10 +563,7 @@ def synthesize_override_snippet(
         merged, _affected, _warnings = apply_override(glossary, override)
         validator = Draft202012Validator(schema)
         base_sigs = {(tuple(e.absolute_path), e.message) for e in validator.iter_errors(glossary)}
-        new_errors = [
-            e for e in validator.iter_errors(merged)
-            if (tuple(e.absolute_path), e.message) not in base_sigs
-        ]
+        new_errors = [e for e in validator.iter_errors(merged) if (tuple(e.absolute_path), e.message) not in base_sigs]
         if new_errors:
             log.warning(
                 "synthesize: dropped override for %s — schema rejected: %s",
@@ -577,6 +583,7 @@ def synthesize_override_snippet(
         reason=reason,
         picked_variant=picked,
         is_guessed=is_guessed,
+        picked_value=effective_value,
         ha_metadata=ha_meta,
         override_dict=override,
         yaml_text=yaml_text,
@@ -610,9 +617,7 @@ def _load_glossary_schema() -> dict:
     global _SCHEMA_CACHE
     if _SCHEMA_CACHE is not None:
         return _SCHEMA_CACHE
-    schema_path = (
-        Path(__file__).resolve().parent / "data" / "glossary_schema.json"
-    )
+    schema_path = Path(__file__).resolve().parent / "data" / "glossary_schema.json"
     with open(schema_path, encoding="utf-8") as f:
         _SCHEMA_CACHE = json.load(f)
     return _SCHEMA_CACHE
@@ -725,9 +730,7 @@ class ShadowDecoder:
                 state.ff_flood_seen = state.ff_flood_seen or obs.ff_flood
                 if fname in self._cap_dependent:
                     field_def = self._walk.get(fname) or {}
-                    state.variants = decode_variants(
-                        fname, field_def, obs.protocol_key, obs.body, self._glossary
-                    )
+                    state.variants = decode_variants(fname, field_def, obs.protocol_key, obs.body, self._glossary)
 
         # Classify.
         for fname, state in states.items():
@@ -837,7 +840,7 @@ def generate_json_sidecar(
                 "category": s.category,
                 "reason": s.reason,
                 "picked_encoding": s.picked_variant.encoding if s.picked_variant else None,
-                "picked_value": _serialise_value(s.picked_variant.value) if s.picked_variant else None,
+                "picked_value": _serialise_value(s.picked_value),
                 "is_guessed": s.is_guessed,
                 "ha_metadata": s.ha_metadata,
                 "yaml_snippet": s.yaml_text,
@@ -874,9 +877,7 @@ def generate_markdown_report(
     lines.append(f"**Timestamp:** {now}")
     lines.append(f"**Glossary version:** {meta_version}")
     lines.append(
-        f"**Queries observed:** {n_queries}    "
-        f"**Responses recorded:** {n_responses}    "
-        f"**FF-flooded frames:** {n_ff}"
+        f"**Queries observed:** {n_queries}    **Responses recorded:** {n_responses}    **FF-flooded frames:** {n_ff}"
     )
     lines.append("")
     lines.append("## Summary by classification")
@@ -888,10 +889,7 @@ def generate_markdown_report(
     lines.append("")
 
     # Populated fields table.
-    populated = [
-        (fname, st) for fname, st in result.states.items()
-        if st.classification == CLASS_POPULATED
-    ]
+    populated = [(fname, st) for fname, st in result.states.items() if st.classification == CLASS_POPULATED]
     populated.sort(key=lambda x: (x[1].frame or "", x[0]))
     lines.append(f"## Populated fields ({len(populated)})")
     lines.append("")
@@ -925,6 +923,8 @@ def generate_markdown_report(
                     f"via `{snip.picked_variant.encoding}` encoding"
                     + (" (guessed — verify against a physical meter)" if snip.is_guessed else "")
                 )
+            elif snip.picked_value is not None:
+                lines.append(f"- **Live-decoded value:** `{_serialise_value(snip.picked_value)}`")
             lines.append(f"- **Reason:** {snip.reason}")
             lines.append("")
             lines.append("```yaml")
@@ -933,10 +933,7 @@ def generate_markdown_report(
             lines.append("")
 
     # Zero-valued — may be idle, may be dead.
-    zeros = [
-        (fname, st) for fname, st in result.states.items()
-        if st.classification == CLASS_ZERO
-    ]
+    zeros = [(fname, st) for fname, st in result.states.items() if st.classification == CLASS_ZERO]
     if zeros:
         zeros.sort(key=lambda x: (x[1].frame or "", x[0]))
         lines.append(f"## Zero-valued fields — may be idle, may be dead ({len(zeros)})")
@@ -948,10 +945,7 @@ def generate_markdown_report(
         lines.append("")
 
     # FF-flooded.
-    ff = [
-        (fname, st) for fname, st in result.states.items()
-        if st.classification == CLASS_FF_FLOOD
-    ]
+    ff = [(fname, st) for fname, st in result.states.items() if st.classification == CLASS_FF_FLOOD]
     if ff:
         lines.append(f"## FF-flooded fields — firmware accepts the query, doesn't populate ({len(ff)})")
         lines.append("")
@@ -962,15 +956,14 @@ def generate_markdown_report(
         lines.append("")
 
     # None-decoded.
-    nones = [
-        (fname, st) for fname, st in result.states.items()
-        if st.classification == CLASS_NONE
-    ]
+    nones = [(fname, st) for fname, st in result.states.items() if st.classification == CLASS_NONE]
     if nones:
         lines.append(f"## Decoder returned None ({len(nones)})")
         lines.append("")
-        lines.append("Could not decode a value from the observed frame — possibly a "
-                     "cap-dependent field with no plausible encoding variant.")
+        lines.append(
+            "Could not decode a value from the observed frame — possibly a "
+            "cap-dependent field with no plausible encoding variant."
+        )
         lines.append("")
 
     # Not-seen.
