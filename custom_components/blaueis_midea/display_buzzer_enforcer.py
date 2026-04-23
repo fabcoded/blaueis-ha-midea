@@ -7,8 +7,8 @@ Phase 3 wires it into the coordinator via the ingress-hook surface.
 
 Background: on this SKU the firmware's display-LED latch exposed at
 ``rsp_0xC0 body[14]`` bits[6:4] globally gates the indoor-unit buzzer
-(see ``blaueis-research/internal-tests/findings/07_display_and_buzzer.md``
-§4.8, confirmed 2026-04-20). Keeping the latch at ``0x70`` (OFF) silences
+(confirmed by live A/B testing 2026-04-20 — display-LED latch gates
+the buzzer globally). Keeping the latch at ``0x70`` (OFF) silences
 ``cmd_0xb0`` property writes; keeping it at ``0x00`` (ON) restores the
 audible feedback. The enforcer re-issues a ``cmd_0x41 body[1]=0x61``
 toggle when observed state drifts from the declared mode.

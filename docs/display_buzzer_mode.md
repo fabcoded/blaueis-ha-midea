@@ -32,10 +32,9 @@ buzzer-via-display-latch behaviour.
 state and the indoor-unit buzzer: while the display is OFF, the AC
 suppresses chimes on every command it receives — including the
 `cmd_0xb0` property writes the integration uses to change vane angle.
-Live-confirmed 2026-04-20 (see
-`blaueis-research/internal-tests/findings/07_display_and_buzzer.md`
-§4.8 for the physics, §4.9 for the integration loop, §4.10 for the
-quad-option model).
+Live-confirmed 2026-04-20 via A/B testing: physics of the
+display-LED latch, the integration loop that re-asserts it, and the
+quad-option mode model were each validated against the live AC.
 
 ## How enforcement works (forced modes)
 
@@ -130,8 +129,8 @@ On upgrade:
 
 ## See also
 
-- `blaueis-research/internal-tests/findings/07_display_and_buzzer.md`
-  §4.8 (physics), §4.9 (integration loop), §4.10 (quad-option model
-  live confirmation).
+- Live A/B testing on 2026-04-20 confirmed the display-LED latch
+  physics, the integration loop that re-asserts it, and the quad-option
+  mode model.
 - `architecture.md` — IngressHook + Device.write_lock patterns this
   feature uses.

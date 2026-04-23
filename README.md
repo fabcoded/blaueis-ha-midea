@@ -103,6 +103,32 @@ Diagnostics**. The JSON includes both the HA-side and gateway-side
 flight-recorder rings, merged by timestamp. Full frame-level capture
 with provenance tracking — no need to raise log levels.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — covers setup, test expectations, the citation rule, and HA-specific reminders (reload vs restart, declarative YAML, cap-gated defaults).
+
+## Related projects in this ecosystem
+
+- [blaueis-libmidea](https://github.com/fabcoded/blaueis-libmidea) — the Python library this integration consumes (vendored under `custom_components/blaueis_midea/lib/`).
+- [blaueis-esphome](https://github.com/fabcoded/blaueis-esphome) — ESP32 port of the gateway (placeholder).
+- [blaueis-hvacshark](https://github.com/fabcoded/blaueis-hvacshark) — Wireshark Lua dissector, live-capture dongle, protocol specs.
+- [blaueis-hvacshark-traces](https://github.com/fabcoded/blaueis-hvacshark-traces) — capture sessions used to derive the protocol.
+
+## Acknowledgments
+
+This integration builds on community research, own hardware captures, and publicly available documentation. A deep thank you to the open-source and home-automation community — especially the contributors around **Home Assistant** and the broader maker community — for their tireless research work and for publishing their findings openly.
+
+Community projects that materially informed this work:
+
+- [dudanov/MideaUART](https://github.com/dudanov/MideaUART) — ESP/Arduino library for Midea UART.
+- [chemelli74/midea-local](https://github.com/chemelli74/midea-local) — Python client for the Midea LAN protocol.
+- [reneklootwijk/node-mideahvac](https://github.com/reneklootwijk/node-mideahvac) — Node.js driver for Midea AC.
+- [NeoAcheron/midea-ac-py](https://github.com/NeoAcheron/midea-ac-py) — early Python Midea AC implementation.
+- [wuwentao/midea_ac_lan](https://github.com/wuwentao/midea_ac_lan) — HA integration covering a broad Midea device set.
+- Countless forum threads, GitHub issues, and pull requests in the HA and ESPHome communities.
+
+If you believe your work is referenced here without proper attribution, or you have licensing concerns, please open an issue — we will respond promptly.
+
 ## License
 
-[CC0 1.0 Universal](https://github.com/fabcoded/blaueis-libmidea/blob/main/LICENSE) — public-domain dedication. No warranty.
+[CC0 1.0 Universal](LICENSE) — public-domain dedication. No warranty.
