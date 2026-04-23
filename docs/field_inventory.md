@@ -95,8 +95,8 @@ For professionals + AI that want to run without HA in the loop:
 
 ```sh
 python -m blaueis.tools.field_inventory \
-  --host 192.168.210.30 \
-  --psk YG23aC3EWkdmabs2Pc5eWL7vR77fUtY2mzyiwJqglVsB \
+  --host <gateway-ip> \
+  --psk <psk-from-gateway-yaml> \
   --label "cooling-20C-from-22"
 ```
 
