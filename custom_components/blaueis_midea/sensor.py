@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
+
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -45,12 +49,29 @@ async def async_setup_entry(
     for desc in coordinator.get_entities_for_platform("sensor"):
         entities.append(BlaueisMideaSensor(coordinator, desc))
 
-    # Gateway sensors (Pi stats)
+    # Gateway sensors (Pi stats). System-level (uptime, disk_used) and
+    # process-level (process_uptime, process_started_at) live side-by-side
+    # so a user can tell a Pi reboot apart from a gateway-service restart:
+    #   - uptime_s            jumps back to ~0 only on Pi reboot
+    #   - process_uptime_s    jumps back to 0 on every gateway restart
+    #   - process_started_at  jumps forward (TIMESTAMP) on every restart
     entities.append(GatewaySensor(coordinator, "cpu_percent", "CPU", SensorDeviceClass.POWER_FACTOR, "%"))
     entities.append(GatewaySensor(coordinator, "ram_used_mb", "RAM Used", None, "MB"))
     entities.append(GatewaySensor(coordinator, "temp_c", "Temperature", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS))
     entities.append(GatewaySensor(coordinator, "disk_used_mb", "Disk Used", None, "MB"))
+    entities.append(GatewaySensor(coordinator, "disk_free_mb", "Disk Free", None, "MB"))
     entities.append(GatewaySensor(coordinator, "uptime_s", "Uptime", SensorDeviceClass.DURATION, "s"))
+    entities.append(GatewaySensor(coordinator, "process_uptime_s", "Process Uptime", SensorDeviceClass.DURATION, "s"))
+    entities.append(
+        GatewaySensor(
+            coordinator,
+            "process_started_at",
+            "Process Started",
+            SensorDeviceClass.TIMESTAMP,
+            None,
+            value_transform=_epoch_to_datetime,
+        )
+    )
 
     if entities:
         async_add_entities(entities)
@@ -140,8 +161,31 @@ class BlaueisMideaSensor(SensorEntity):
         return value
 
 
+def _epoch_to_datetime(value: Any) -> datetime | None:
+    """Convert a Unix epoch (float | int | None) to a UTC ``datetime``.
+
+    Used as the ``value_transform`` for the ``process_started_at``
+    sensor — HA's ``SensorDeviceClass.TIMESTAMP`` requires a ``datetime``,
+    not a number, so the gateway's float-epoch needs converting on the
+    HA side. Returns ``None`` for missing or invalid values, which HA
+    renders as ``unknown``.
+    """
+    if value is None:
+        return None
+    try:
+        return datetime.fromtimestamp(float(value), tz=UTC)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
 class GatewaySensor(SensorEntity):
-    """Sensor for gateway Pi stats (CPU, RAM, temp, etc.)."""
+    """Sensor for gateway Pi stats (CPU, RAM, temp, etc.).
+
+    ``value_transform`` is an optional ``Callable[[Any], Any]`` applied
+    to the raw stat value before HA reads ``native_value``. Used to
+    convert the gateway's epoch-float ``process_started_at`` into the
+    ``datetime`` that ``SensorDeviceClass.TIMESTAMP`` expects.
+    """
 
     _attr_has_entity_name = True
     should_poll = False
@@ -153,9 +197,12 @@ class GatewaySensor(SensorEntity):
         name: str,
         device_class: SensorDeviceClass | None,
         unit: str | None,
+        *,
+        value_transform: Callable[[Any], Any] | None = None,
     ) -> None:
         self._coord = coordinator
         self._stat_key = stat_key
+        self._value_transform = value_transform
         self._attr_unique_id = (
             f"{coordinator.host}_{coordinator.port}_gw_{stat_key}"
         )
@@ -181,4 +228,7 @@ class GatewaySensor(SensorEntity):
 
     @property
     def native_value(self):
-        return self._coord.device.gateway_stats.get(self._stat_key)
+        raw = self._coord.device.gateway_stats.get(self._stat_key)
+        if self._value_transform is not None:
+            return self._value_transform(raw)
+        return raw
