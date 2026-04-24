@@ -172,11 +172,39 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 )
             for w in warnings:
                 _LOGGER.info("Glossary override warning: %s", w)
+            # The ``run_inventory_scan_now`` checkbox is a trigger, not
+            # a setting — fire the scan service if it was ticked, then
+            # drop the value so it doesn't persist. User re-opens
+            # Configure ~15 s later to see the fresh report in the
+            # latest-field-inventory textarea.
+            if user_input.pop("run_inventory_scan_now", False):
+                from datetime import UTC, datetime
+
+                label = f"configure-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        DOMAIN,
+                        "run_field_inventory",
+                        {"label": label},
+                        blocking=False,
+                    )
+                )
+                _LOGGER.info(
+                    "Configure dialog: queued field-inventory scan (label=%s)",
+                    label,
+                )
+
             # See docs/ha_config_flow_gotchas.md §1: async_create_entry
             # REPLACES options. Merging preserves fields hidden by
             # cap-gating (e.g. display_buzzer_mode when an override has
             # force-off'd screen_display) so the policy survives the
             # cap-hidden cycle.
+            #
+            # The ``latest_field_inventory_display`` field is rendered
+            # for read-only information; we never persist whatever the
+            # user submits for it (the value is recomputed from
+            # coordinator state on every form render).
+            user_input.pop("latest_field_inventory_display", None)
             new_options = {**self._config_entry.options, **user_input}
             return self.async_create_entry(title="", data=new_options)
 
@@ -276,6 +304,41 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 type=selector.TextSelectorType.TEXT,
             )
         )
+
+        # Advanced — "run a new scan on submit" trigger. Ticked + Submit
+        # fires the blaueis_midea.run_field_inventory service. Scan runs
+        # as a background task; the user re-opens Configure ~15 s later
+        # to see the fresh report in the textarea below.
+        #
+        # Always defaults to False on render so a user who submits the
+        # form without ticking doesn't accidentally re-trigger a scan on
+        # every Save. The submitted value is dropped in async_step_init,
+        # never persisted to entry.options — see HA form-data trap §4
+        # (a persistent-True default-True field can never be unticked).
+        schema_dict[
+            vol.Optional("run_inventory_scan_now", default=False)
+        ] = selector.BooleanSelector()
+
+        # Advanced — latest field-inventory report. Read-only(-ish):
+        # the field is writable by voluptuous rules but we ignore
+        # whatever the user submits (we only read our own coordinator
+        # state). Presents the download URL + the full markdown so the
+        # user can grab the file without depending on HA's persistent
+        # notification bell. Key is namespaced so it doesn't collide
+        # with anything persisted.
+        latest_md = _build_latest_inventory_display(coord)
+        schema_dict[
+            vol.Optional(
+                "latest_field_inventory_display",
+                default=latest_md,
+            )
+        ] = selector.TextSelector(
+            selector.TextSelectorConfig(
+                multiline=True,
+                type=selector.TextSelectorType.TEXT,
+            )
+        )
+
         schema = vol.Schema(schema_dict)
         # See docs/ha_config_flow_gotchas.md §5: every placeholder
         # referenced in strings.json's description MUST be supplied,
@@ -291,6 +354,70 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders=placeholders,
         )
 
+
+
+def _build_latest_inventory_display(coord) -> str:
+    """Compose the text shown in the Configure form's 'Latest field
+    inventory' field.
+
+    Pulls markdown + metadata from the coordinator attributes the
+    field-inventory service writes on every scan completion
+    (``inventory_latest_md`` / ``_label`` / ``_ts``). These survive HA
+    restarts — they're re-hydrated from ``helpers.storage.Store`` at
+    ``async_setup_entry`` so the textarea always shows the latest scan
+    even after a reboot.
+
+    Intentionally not editable by the user — whatever gets submitted
+    is dropped in ``async_step_init`` and recomputed on next render.
+    """
+    if coord is None:
+        return (
+            "No field inventory scan has been run yet on this integration.\n"
+            "Tick 'Run new inventory scan on submit' above and save — the "
+            "result will appear here on your next visit to Configure."
+        )
+    md = getattr(coord, "inventory_latest_md", None)
+    label = getattr(coord, "inventory_latest_label", None)
+    ts = getattr(coord, "inventory_latest_ts", None)
+    if not md:
+        return (
+            "No field inventory scan has been run yet.\n"
+            "\n"
+            "Tick 'Run new inventory scan on submit' above and save — the "
+            "latest scan's markdown report will appear here on your next "
+            "visit to Configure (scans take ~15 s to complete)."
+        )
+
+    # ``ts`` is stored as an ISO-8601 string (from the JSON sidecar's
+    # meta.timestamp). Age calculation is best-effort; if parsing fails
+    # we just drop the Age line rather than die.
+    age_line = ""
+    if isinstance(ts, str) and ts:
+        try:
+            from datetime import UTC, datetime
+
+            dt = datetime.fromisoformat(ts)
+            age_s = (datetime.now(UTC) - dt).total_seconds()
+            age_min = max(0, int(age_s // 60))
+            age_line = f"Age:       {age_min} min\n"
+        except (ValueError, TypeError):
+            pass
+
+    header = (
+        f"── Latest field inventory ──\n"
+        f"Label:     {label or '<unknown>'}\n"
+        f"Timestamp: {ts or '<unknown>'}\n"
+        f"{age_line}"
+        f"\n"
+        f"The scan below is cached on disk and survives HA restarts. "
+        f"Re-running the scan replaces this single cached entry — we "
+        f"never accumulate history. Select + copy the markdown below to "
+        f"share; the textarea value is ignored on save (nothing is "
+        f"stored back).\n"
+        f"══════════════════════════════════════════════════════════════\n"
+        f"\n"
+    )
+    return header + md
 
 
 class CannotConnect(exceptions.HomeAssistantError):

@@ -4,12 +4,12 @@ A diagnostic that sends every known read-query to the gateway, decodes
 the responses **without cap-gating**, and reports which of the 211+
 glossary fields are carrying real data on your specific firmware.
 
-Three entry points — same output, same core logic, pick whichever
-fits your workflow:
+Two entry points — same output, same core logic:
 
-1. **HA button:** *AC device → "Run field inventory scan"* → tap → browser download.
+1. **HA Configure menu:** *AC device → Configure → "Run new inventory scan on submit"* → tick + save → scan runs → result appears in the textarea below on your next visit to Configure.
 2. **HA service:** `blaueis_midea.run_field_inventory` → scriptable from automations.
-3. **CLI:** `python -m blaueis.tools.field_inventory …` → for pros + AI without HA in the loop.
+
+(A CLI variant lives in libmidea at `python -m blaueis.tools.field_inventory` for protocol work without HA in the loop.)
 
 ## Why this exists
 
@@ -34,95 +34,60 @@ A field that's `populated` in one scan and `zero` in another is
 telling you about state-dependency. That's the main use case for
 running it repeatedly.
 
-## HA button
+## Running a scan from Configure
 
-The AC device has a **"Run field inventory scan"** button. Tap it → a
-background task kicks off. About 10 seconds later, a persistent
-notification appears with two download links:
+1. *Settings → Devices & Services → Blaueis Midea AC → Configure*
+2. Scroll to **"Run new inventory scan on submit"**, tick the box.
+3. Hit Submit. The form closes immediately; the scan runs in the
+   background (~15 s).
+4. Re-open Configure. The **"Latest field inventory report"** textarea
+   now shows the full markdown — select + copy to save or share.
 
-- markdown report (human-readable)
-- JSON sidecar (machine-readable, used by `compare_to_blob_id`)
-
-Links are single-use (**unlinked after first download**) and expire
-after **15 minutes**. Click once, save locally if you want to keep it.
+That's it. No URLs, no bell-icon notification, no files in `/config/`.
 
 ## HA service
 
 ```yaml
 service: blaueis_midea.run_field_inventory
 data:
-  label: "cooling-20C-from-22"          # required — short state tag for the filename + header
-  compare_to_blob_id: "abc123…"          # optional — uuid of a prior snapshot for diff-mode
-  suggest_overrides: true                # optional, default true
+  label: "cooling-20C-from-22"   # required — short state tag for the header
+  suggest_overrides: true         # optional, default true
+  reset_prior: false              # optional — skip the diff section on this run
 ```
 
-The service returns **immediately**. Actual scan + file preparation
-happens in a background task. When it's done, a persistent notification
-fires with the download links.
+The service returns immediately; the scan runs as a background task.
+When it completes, the coordinator's cache (and therefore the
+Configure textarea) updates with the new report.
 
-`compare_to_blob_id` takes the uuid from a prior scan's notification
-(it's in the URL: `/api/blaueis_midea/inventory/<uuid>/md`). Pass it in
-and a third markdown file lands alongside — the field-by-field diff
-between the two runs.
+### Compare-against-previous is automatic
+
+Each completed scan is persisted to HA's `helpers.storage.Store`
+(under `/config/.storage/blaueis_midea.<entry_id>.snapshot`). The
+*next* scan finds that prior snapshot, computes a field-by-field diff,
+and appends a **Changed fields** section to the new markdown report.
+No parameter needed — compare is the default.
+
+Use `reset_prior: true` when the baseline is invalid (e.g. after a
+firmware change) and you want a clean start without a diff section.
 
 Typical workflow for state-dependency discovery:
 
 ```yaml
-# In your automation — hypothetical "scan each state" script:
 sequence:
-  # 1. AC off
   - service: climate.turn_off
     target: { entity_id: climate.atelier_midea }
-  - delay: "00:00:30"   # let it settle
+  - delay: "00:00:30"
   - service: blaueis_midea.run_field_inventory
-    data: { label: "off" }
-  # 2. AC cooling
+    data: { label: "off", reset_prior: true }  # baseline
   - service: climate.set_hvac_mode
     target: { entity_id: climate.atelier_midea }
     data: { hvac_mode: cool }
-  - delay: "00:02:00"   # let the compressor spin up
+  - delay: "00:02:00"
   - service: blaueis_midea.run_field_inventory
-    data:
-      label: "cooling"
-      compare_to_blob_id: "<uuid-from-the-off-scan>"
+    data: { label: "cooling" }                 # auto-diffs vs "off"
 ```
 
-The uuid is surfaced in the first scan's notification.
-
-## CLI
-
-For professionals + AI that want to run without HA in the loop:
-
-```sh
-python -m blaueis.tools.field_inventory \
-  --host <gateway-ip> \
-  --psk <psk-from-gateway-yaml> \
-  --label "cooling-20C-from-22"
-```
-
-Writes two files to the current directory:
-`2026-04-23_20-45-00_cooling-20C-from-22_inventory.md` and `.json`.
-
-Compare two prior runs:
-
-```sh
-python -m blaueis.tools.field_inventory \
-  --host 192.168.210.30 --psk … \
-  --label "idle" \
-  --compare ./2026-04-23_off_inventory.json
-```
-
-Produces a third `…_compare.md` file alongside.
-
-Flags:
-
-| Flag | Default | Purpose |
-|---|---|---|
-| `--wait` | 1.5 s | Per-query response-wait window |
-| `--output-dir` | cwd | Where the files land |
-| `--no-suggest-overrides` | off | Skip the YAML-synthesis section |
-| `--no-encrypt` | off | Disable AES-GCM (dev gateways only) |
-| `--compare PATH` | — | Diff against a prior JSON sidecar |
+The second scan's markdown carries the diff section.
 
 ## Suggested override snippets
 
@@ -163,9 +128,9 @@ shown to the user.
 When a cap-dependent field has multiple encoding variants that all
 produce plausible values (BCD vs linear, for instance) and the
 glossary has no `range:` bounds to discriminate, the picked encoding
-is flagged **_(guessed)_**. Check the JSON sidecar's `variants` array
-for the alternatives; pick the one whose value matches reality as
-measured by an external meter.
+is flagged **_(guessed)_**. Check the JSON sidecar fields for the
+alternatives; pick the one whose value matches reality as measured by
+an external meter.
 
 ## How it works
 
@@ -174,32 +139,47 @@ Short version:
 1. Core logic lives in `blaueis.core.inventory` (pure functions —
    `ShadowDecoder`, `classify()`, `synthesize_override_snippet()`,
    report writers). No I/O, no HA dep.
-2. The CLI opens its own WS to the gateway, feeds frames into a
-   standalone `ShadowDecoder`.
-3. The HA integration taps the existing `Device` WS via a frame-observer
-   hook (added in blaueis-client as part of this feature), injects
-   extra queries the normal poll loop doesn't send, and lets the same
-   core library build the output.
-4. HA serves the output as ephemeral tempfiles via a single-use
-   `HomeAssistantView`. No files ever land in `/config/`.
+2. The HA integration attaches a `ShadowDecoder` to the existing
+   `Device` WebSocket via the `register_frame_observer` hook, injects
+   extra queries the normal poll loop doesn't send, and lets the core
+   library build the markdown + JSON sidecar.
+3. The scan result (markdown + JSON sidecar) is persisted to HA Store
+   — one slot per config entry, overwritten on every scan, survives
+   HA restarts.
+4. The Configure textarea reads the cached markdown off the
+   coordinator. The coordinator re-hydrates from Store on
+   `async_setup_entry`.
 
-Design philosophy and decisions are documented in the commit history +
-inline docstrings. The core module's docstring is a good entry point.
+### Memory + runtime cost
+
+- **Observer is attached only during a scan** (~10 s window). At rest,
+  the ingress path costs one `if self._frame_observers:` check per
+  frame on an empty list — effectively free.
+- **RAM held at rest:** one snapshot_json dict (~30 KB) + one rendered
+  markdown string (~20 KB) + a few scalars. No ring, no FIFO. Each
+  scan rebinds the coordinator attrs; the previous values are
+  garbage-collected.
+- **Disk at rest:** one JSON blob per config entry at
+  `/config/.storage/blaueis_midea.<entry_id>.snapshot`. Overwritten on
+  each scan. ~50 KB.
 
 ## Troubleshooting
 
-**"Inventory blob not found or expired" (404)**
-: The tempfile has been unlinked. Either it was already downloaded
-  once (links are single-use), or 15 minutes have passed since the
-  scan. Run the scan again.
+**The textarea says "No field inventory scan has been run yet" but I just ran one**
+: Re-open the Configure form. The textarea is populated from the
+  coordinator at form-render time — a scan completing mid-form-display
+  won't push an update. Close + reopen.
 
-**"Inventory file already downloaded" (410)**
-: You're clicking the same link a second time. Save the file after
-  the first download if you want to share it.
+**Scan takes longer than 10 s**
+: The collection window is fixed in `_SCAN_COLLECTION_SECONDS`
+  (`field_inventory.py`). Responses after the window drop on the
+  floor. If you're consistently losing responses, raise the constant
+  — frame spacing (200 ms minimum) limits how fast we can send, so
+  tight scans will always need a generous window.
 
 **No `Suggested overrides` section in the report**
 : Either no field qualifies (everything `populated` is already
-  `feature_available: always`), or `suggest_overrides=false` was
+  `feature_available: always`), or `suggest_overrides: false` was
   passed. The section is omitted entirely, not rendered empty.
 
 **Picked encoding is wrong (value obviously unrealistic)**
@@ -208,9 +188,10 @@ inline docstrings. The core module's docstring is a good entry point.
   in `glossary.yaml` would exclude the wrong variant, a PR to add the
   bounds would make the picker deterministic.
 
-**Scan takes longer than 10 s**
-: The collection window is fixed in `_SCAN_COLLECTION_SECONDS`
-  (`field_inventory.py`). Responses after the window drop on the
-  floor. If you're consistently losing responses, raise the constant
-  — frame spacing (150 ms minimum) limits how fast we can send, so
-  tight scans will always need a generous window.
+**I want the scan history across restarts — is that possible?**
+: Intentionally not. HA Store keeps exactly one prior scan per config
+  entry; re-running a scan replaces it. If you want a durable history,
+  copy the markdown out of Configure into your own notes. Runtime
+  storage for inventory history is out of scope — this feature is a
+  "what's live right now, vs the last time I looked" diagnostic, not a
+  time-series store.

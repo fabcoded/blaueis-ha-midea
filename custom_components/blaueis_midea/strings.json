@@ -27,20 +27,24 @@
         "data": {
           "follow_me_function_enabled": "Enable Follow Me Function",
           "follow_me_function_sensor": "Temperature sensor",
-          "follow_me_function_guard_temp_min": "Minimum temperature guard (\u00b0C)",
-          "follow_me_function_guard_temp_max": "Maximum temperature guard (\u00b0C)",
+          "follow_me_function_guard_temp_min": "Minimum temperature guard (°C)",
+          "follow_me_function_guard_temp_max": "Maximum temperature guard (°C)",
           "follow_me_function_safety_timeout": "Sensor timeout (seconds)",
           "display_buzzer_mode": "Display & Buzzer mode",
-          "glossary_overrides_yaml": "Advanced \u2014 Glossary overrides (YAML)"
+          "glossary_overrides_yaml": "Advanced — Glossary overrides (YAML)",
+          "run_inventory_scan_now": "Run new inventory scan on submit",
+          "latest_field_inventory_display": "Latest field inventory report"
         },
         "data_description": {
           "display_buzzer_mode": "Controls the AC display LED and, by extension, the buzzer. Non-enforced lets you control the display freely; Forced modes keep the display in the selected state and the integration re-asserts it if the remote changes it.",
-          "glossary_overrides_yaml": "Developer / debugging only \u2014 leave empty for normal operation. See the integration README for the override format and examples."
+          "glossary_overrides_yaml": "Developer / debugging only — leave empty for normal operation. See the integration README for the override format and examples.",
+          "run_inventory_scan_now": "Tick and save to trigger a fresh field-inventory scan. Takes ~10-15 s; reopen Configure afterwards to see the result below. Each scan replaces the single cached entry — no history accumulates.",
+          "latest_field_inventory_display": "Read-only preview of the latest scan. Includes a human-readable timestamp comment at the top. Cached on disk and rehydrated after HA restart — re-running a scan replaces this single entry. Select + copy to share."
         }
       }
     },
     "error": {
-      "invalid_override": "Invalid glossary override \u2014 see message in description above."
+      "invalid_override": "Invalid glossary override — see message in description above."
     }
   },
   "selector": {
