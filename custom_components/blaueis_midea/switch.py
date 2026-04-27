@@ -34,20 +34,7 @@ async def async_setup_entry(
     for desc in coordinator.get_entities_for_platform("switch"):
         entities.append(BlaueisMideaSwitch(coordinator, entry, desc))
 
-    # Follow Me Function — gated by the master enable flag in options.
-    # Two-flag safety design (intentional, see docs/follow_me_function.md §3):
-    #   CONF_FMF_ENABLED  — *general availability* in the Configure menu.
-    #                       Controls whether the on/off switch entity exists
-    #                       on the device card at all. Disabling makes the
-    #                       switch disappear (entity is removed from the
-    #                       registry by _cleanup_orphaned_field_entities),
-    #                       not merely become unavailable.
-    #   CONF_FMF_ENGAGED  — current activation state (the on/off switch
-    #                       itself). Toggling persists across HA restarts.
-    # The two flags together prevent accidental misconfiguration of a
-    # function that overrides the AC's own thermistor reading.
-    if entry.options.get(CONF_FMF_ENABLED, False):
-        entities.append(BlauiesFollowMeSwitch(coordinator, entry))
+    entities.append(BlauiesFollowMeSwitch(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -120,16 +107,8 @@ class BlaueisMideaSwitch(SwitchEntity):
 class BlauiesFollowMeSwitch(SwitchEntity):
     """Engage/disengage switch for the Follow Me Function.
 
-    Only registered when CONF_FMF_ENABLED is True (master availability
-    flag, set via the Configure menu). When the master flag is off this
-    entity does not exist on the device card at all — see
-    ``async_setup_entry`` and the cleanup logic in
-    ``_cleanup_orphaned_field_entities`` for the disappear/reappear
-    plumbing.
-
-    Available when: gateway connected AND AC powered on AND a source
-    sensor is configured. Toggling persists CONF_FMF_ENGAGED to the
-    config entry options so the engage state survives HA restarts.
+    Gated by CONF_FMF_ENABLED — unavailable when the feature is disabled
+    in config. Toggle writes CONF_FMF_ENGAGED to persist across restarts.
     """
 
     _attr_has_entity_name = True
@@ -172,17 +151,13 @@ class BlauiesFollowMeSwitch(SwitchEntity):
 
     @property
     def available(self) -> bool:
-        # CONF_FMF_ENABLED is enforced at registration time (see
-        # async_setup_entry); if this entity instance exists at all,
-        # the master flag is True. Runtime availability gates on what
-        # can actually change moment-to-moment.
-        if not self._coord.connected:
+        enabled = self._entry.options.get(CONF_FMF_ENABLED, False)
+        if not enabled:
             return False
-        if not self._coord.device.read("power"):
-            return False
-        if not self._entry.options.get(CONF_FMF_SENSOR):
-            return False
-        return True
+        connected = self._coord.connected
+        power = self._coord.device.read("power")
+        source = self._entry.options.get(CONF_FMF_SENSOR)
+        return bool(connected and power and source)
 
     @property
     def is_on(self) -> bool:

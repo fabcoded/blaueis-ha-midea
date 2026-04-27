@@ -99,83 +99,28 @@ This is event-driven, not periodic:
 
 ---
 
-## 3. Configuration — two-flag safety design
-
-Follow Me overrides the AC's own thermistor with an external sensor. A
-misconfigured external sensor (wrong room, wrong unit, dead battery)
-can drive heating / cooling badly. To make accidental activation
-hard, the integration uses **two distinct flags** plus the sensor +
-guard configuration in the Configure menu.
+## 3. Configuration
 
 Open **Settings > Devices & Services > Blaueis Midea AC > Configure**.
 
 | Option | Key | Default | Range | Description |
 |---|---|---|---|---|
-| Enable Follow Me Function | `follow_me_function_enabled` | `false` | bool | **Master availability.** Gates whether the on/off switch even exists on the device card. |
-| Temperature sensor | `follow_me_function_sensor` | — | entity | HA temperature sensor entity (must be `device_class: temperature`) |
+| Enable | `follow_me_function_enabled` | `false` | bool | Persistent on/off toggle |
+| Sensor | `follow_me_function_sensor` | — | entity | HA temperature sensor entity |
 | Guard min | `follow_me_function_guard_temp_min` | `-15` | -40..10 | Lower temperature bound (°C) |
 | Guard max | `follow_me_function_guard_temp_max` | `40` | 25..50 | Upper temperature bound (°C) |
 | Timeout | `follow_me_function_safety_timeout` | `300` | 60..3600 | Max sensor age in seconds |
 
-The two flags do different jobs:
+### Switch entity
 
-| Flag | Key | Role | Surface |
-|---|---|---|---|
-| Master availability | `follow_me_function_enabled` | "Is this feature configured and ready to be used at all?" | Configure menu only |
-| Engage state | `follow_me_function_armed` | "Is Follow Me running right now?" | The on/off switch on the device card |
+The **Follow Me Function** switch reflects the persistent desired state
+(config option), not the runtime state. This means:
 
-### Lifecycle of the on/off switch
-
-```
-Configure menu                Device card
-─────────────────             ───────────────────
-enabled = False    ──────►    (no switch shown — entity removed
-                               from the registry by cleanup; it
-                               truly disappears, NOT "Unavailable")
-
-enabled = True
-sensor unset       ──────►    Switch shown, "Unavailable"
-                               (master is on but you can't engage
-                               without a sensor)
-
-enabled = True
-sensor set
-AC powered off     ──────►    Switch shown, "Unavailable"
-
-enabled = True
-sensor set
-AC on, gateway up  ──────►    Switch shown, available
-                               armed=False → switch OFF
-                               armed=True  → switch ON, manager engaged
-```
-
-A flip of the master flag triggers a full config-entry reload so the
-switch is added to or removed from the device card cleanly. The
-entity-registry sweep in `_cleanup_orphaned_field_entities` removes
-the FM switch's registry entry when the master flag is off, so it's
-not left behind as an orphaned "Unavailable" item.
-
-### What the on/off switch does
-
-The on/off switch reflects `follow_me_function_armed` — your *intent*
-for Follow Me to be running. Toggling it:
-
-- **ON** → starts the manager, armed = True, persisted to options.
-- **OFF** → stops the manager, armed = False, persisted to options.
-
-The switch stays in the ON position even when the manager is
-temp-disabled (sensor lost / out of range / stale). The intent is
-still to run; the watchdog will resume automatically when the sensor
-recovers. To see the AC's actual protocol state, look at the
-`follow_me` binary sensor (read-only, populated from the C0 response).
-
-### Persistence across restarts
-
-Both flags survive HA restarts (they live in `entry.options`). On HA
-boot:
-
-- `enabled=True AND armed=True AND sensor set` → manager auto-starts.
-- Otherwise → manager stays idle until the user toggles the switch.
+- Switch shows ON even when temporarily disabled (sensor lost) — the *intent*
+  is still to run Follow Me.
+- Toggling the switch writes `follow_me_function_enabled` to the config entry
+  options, persisting across HA restarts.
+- The `follow_me` binary sensor (protocol layer) shows the AC's actual state.
 
 ---
 
