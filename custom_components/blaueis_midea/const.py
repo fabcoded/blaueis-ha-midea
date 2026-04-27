@@ -131,7 +131,13 @@ CONF_GLOSSARY_OVERRIDES = "glossary_overrides_yaml"
 # cap dependency, never auto-remove".
 SYNTHETIC_ENTITY_CAP_DEPENDENCIES: dict[str, set[str]] = {
     "display_buzzer_mode": {"screen_display"},
-    "blaueis_follow_me": set(),  # always-available; no cap gate
+    # No B5-cap gate, but the FM switch is gated on CONF_FMF_ENABLED at
+    # registration time + cleaned from the registry by an option-driven
+    # branch in _cleanup_orphaned_field_entities (see __init__.py). The
+    # empty cap-dep set keeps it in the catalog so the cap-driven branch
+    # treats it as "always-available", while the option branch handles
+    # the master-flag flip.
+    "blaueis_follow_me": set(),
 }
 
 # Stored policy keys (persisted in config entry options).

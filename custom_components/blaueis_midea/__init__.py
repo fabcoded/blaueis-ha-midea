@@ -126,6 +126,11 @@ async def async_setup_entry(
     enabled = entry.options.get(CONF_FMF_ENABLED, False)
     armed = entry.options.get(CONF_FMF_ENGAGED, False)
     source = entry.options.get(CONF_FMF_SENSOR)
+    # Snapshot the master availability flag so _async_options_updated
+    # can detect a flip and reload the entry. The flip path needs a
+    # full reload so the FM switch entity is added/removed by
+    # switch.async_setup_entry — see docs/follow_me_function.md §3.
+    coordinator._applied_fmf_enabled = bool(enabled)
     if enabled and armed and source:
         try:
             await fm.async_start(source)
@@ -191,6 +196,20 @@ async def _async_options_updated(
     if _override_changed(entry):
         _LOGGER.info(
             "Glossary override changed — reloading config entry to apply"
+        )
+        await hass.config_entries.async_reload(entry.entry_id)
+        return
+
+    # If the Follow Me Function master-availability flag flipped, the FM
+    # switch entity must be added or removed from the device card —
+    # switch.async_setup_entry only registers it when CONF_FMF_ENABLED is
+    # True. Reload the entry so the platform setup re-runs against the
+    # new flag value. _cleanup_orphaned_field_entities (run after setup)
+    # then sweeps the registry so the disappearance is real, not
+    # "Unavailable".
+    if _fmf_enabled_changed(entry):
+        _LOGGER.info(
+            "Follow Me Function master flag flipped — reloading entry"
         )
         await hass.config_entries.async_reload(entry.entry_id)
         return
@@ -292,6 +311,17 @@ def _override_changed(entry: BlaueisMideaConfigEntry) -> bool:
     return current != applied
 
 
+def _fmf_enabled_changed(entry: BlaueisMideaConfigEntry) -> bool:
+    """True if the Follow Me Function master-availability flag flipped
+    since the last setup. The FM switch entity is gated on this flag at
+    registration time (switch.async_setup_entry), so a flip needs a
+    full entry reload to add/remove the entity from the device card."""
+    coord = entry.runtime_data
+    current = bool(entry.options.get(CONF_FMF_ENABLED, False))
+    applied = bool(getattr(coord, "_applied_fmf_enabled", False))
+    return current != applied
+
+
 # ── Display & Buzzer mode migration ────────────────────────────────────
 
 def _migrate_display_buzzer_options(
@@ -390,6 +420,24 @@ def _cleanup_orphaned_field_entities(
         deps = SYNTHETIC_ENTITY_CAP_DEPENDENCIES.get(suffix)
         if deps is None:
             continue   # not in catalog → integration owns it, leave alone
+
+        # Pass 2a: Follow Me switch — gated by the master-availability
+        # config option, not by a glossary cap. Sits in the synthetic
+        # catalog with an empty cap-dep set so the cap-driven branch
+        # below is a no-op for it; the option-driven check below makes
+        # the disappear/reappear concrete in the entity registry. See
+        # docs/follow_me_function.md §3.
+        if suffix == "blaueis_follow_me":
+            if entry.options.get(CONF_FMF_ENABLED, False):
+                continue   # master flag on → entity belongs
+            _LOGGER.info(
+                "Removing Follow Me Function switch %s — master flag off",
+                ent.entity_id,
+            )
+            reg.async_remove(ent.entity_id)
+            removed += 1
+            continue
+
         if not deps:
             continue   # no dependencies → never auto-remove
         missing = deps - available
