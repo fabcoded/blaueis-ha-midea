@@ -90,7 +90,11 @@ A single aggregate entity, unlike the per-field entities above. Absorbs fields l
 
 Callback fields — changes to any of `CLIMATE_CALLBACK_FIELDS` refresh the climate entity state.
 
-### 4.3 Two HA devices per config entry
+### 4.3 Display & Buzzer mode select
+
+A synthetic `select` entity (separate from glossary-derived selects) replaces the would-be `screen_display` switch on devices that advertise the cap. Four options: `on` / `off` / `forced_on` / `forced_off`. The forced modes run an active-driving enforcer that re-asserts the chosen state when the AC drifts (e.g. someone presses the LED button on the remote), with a 15 s cooldown. The forced policy is persisted in the config entry's `options` and survives restarts. Full design + UX rationale in [`display_buzzer_mode.md`](display_buzzer_mode.md); ingress-hook + write-lock plumbing in [`architecture.md`](architecture.md).
+
+### 4.4 Two HA devices per config entry
 
 - **AC device** (`"{host}:{port}_ac"`) — carries the climate entity + all AC sensors / switches / selects.
 - **Gateway device** (`"{host}:{port}_gw"`) — carries Pi health sensors (CPU, RAM, temp, uptime) from the gateway's `pi_status` broadcast.
@@ -225,4 +229,6 @@ back and interrupts every other integration.
 | Extend the integration (new entity type, new glossary field) | `custom_components/blaueis_midea/` + `../blaueis-libmidea/docs/architecture.md` §4 |
 | See which glossary fields my AC actually populates | [field_inventory.md](field_inventory.md) — button / service / CLI |
 | Find a copy-paste override for a hidden-but-populated field | [field_inventory.md](field_inventory.md) §"Suggested override snippets" |
+| Configure Display & Buzzer behaviour | [display_buzzer_mode.md](display_buzzer_mode.md) |
+| Build a new active-driving feature (ingress hooks) | [architecture.md](architecture.md) |
 | SSH / token / update workflow | Workspace root `AGENTS.md` |
