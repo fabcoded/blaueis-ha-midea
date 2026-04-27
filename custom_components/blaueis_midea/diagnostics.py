@@ -49,7 +49,7 @@ async def async_get_config_entry_diagnostics(
     )
 
     session_dict: dict[str, Any] = {}
-    client = getattr(coordinator.device, "_client", None)
+    client = coordinator.device.client
     if client is not None and getattr(client, "gw_session", None) is not None:
         session_dict = dataclasses.asdict(client.gw_session)
 
@@ -112,7 +112,7 @@ async def _pull_gateway_ring(coordinator) -> tuple[list[dict], dict]:
     Failure is non-fatal — diagnostics returns the local ring plus an error
     marker so the user always gets *something* to attach to a bug report.
     """
-    client = getattr(coordinator.device, "_client", None)
+    client = coordinator.device.client
     if client is None or getattr(client, "_ws", None) is None:
         return [], {"error": "gateway not connected"}
 

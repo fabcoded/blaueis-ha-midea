@@ -236,15 +236,12 @@ class BlaueisMideaClimate(ClimateEntity):
         return PRESET_NONE
 
     # ── Commands ────────────────────────────────────────────
-
-    def _check_connected(self) -> None:
-        """Raise if gateway is not connected."""
-        if not self._coord.connected:
-            from homeassistant.exceptions import HomeAssistantError
-            raise HomeAssistantError("Gateway not connected")
+    # Disconnect handling: rely on the device.set() layer to reject when
+    # the gateway is down — same as switch/select/number platforms. No
+    # explicit pre-flight check here so the UX stays uniform across
+    # platforms (silent unavailability via state, not a raised error).
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        self._check_connected()
         if hvac_mode == HVACMode.OFF:
             result = await self._device.set(power=False)
             check_set_result(result, primary_fields={"power"})
@@ -255,14 +252,12 @@ class BlaueisMideaClimate(ClimateEntity):
                 check_set_result(result, primary_fields={"power", "operating_mode"})
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        self._check_connected()
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is not None:
             result = await self._device.set(target_temperature=temp)
             check_set_result(result, primary_fields={"target_temperature"})
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
-        self._check_connected()
         if fan_mode == self._fan_custom_label:
             fan_mode = "Auto"
         speed = self._fan_name_to_raw.get(fan_mode)
@@ -275,7 +270,6 @@ class BlaueisMideaClimate(ClimateEntity):
         # in the byte. Previous 0xC was the already-shifted in-byte pattern,
         # which the codec then re-masked down to 0 (= OFF). Confirmed on the
         # wire: raw 3 puts 0b11 into bits[3:2] of body[7] → 0x0C → ON.
-        self._check_connected()
         v = swing_mode in ("vertical", "both")
         h = swing_mode in ("horizontal", "both")
         changes = {}
@@ -289,7 +283,6 @@ class BlaueisMideaClimate(ClimateEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set preset — clears all other presets first."""
-        self._check_connected()
         changes = {}
         primary: set[str] = set()
         for field_name in self._available_presets:
@@ -304,11 +297,9 @@ class BlaueisMideaClimate(ClimateEntity):
             check_set_result(result, primary_fields=primary)
 
     async def async_turn_on(self) -> None:
-        self._check_connected()
         result = await self._device.set(power=True)
         check_set_result(result, primary_fields={"power"})
 
     async def async_turn_off(self) -> None:
-        self._check_connected()
         result = await self._device.set(power=False)
         check_set_result(result, primary_fields={"power"})

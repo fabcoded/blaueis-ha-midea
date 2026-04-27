@@ -434,8 +434,7 @@ def _install_debug_ring(entry: BlaueisMideaConfigEntry):
         lg.addHandler(ring)
         attached.append(lg)
 
-    # Stash so unload can detach cleanly.
-    entry.async_on_unload(lambda: None)  # no-op, we detach in _uninstall
+    # Stash so unload can detach cleanly via _uninstall_debug_ring.
     entry._blaueis_ring = ring  # type: ignore[attr-defined]
     entry._blaueis_ring_loggers = attached  # type: ignore[attr-defined]
     _LOGGER.debug(

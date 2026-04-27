@@ -44,7 +44,7 @@ async def async_setup_entry(
             continue
         candidates += 1
         entities.append(BlaueisMideaSlider(coordinator, fname, fmeta))
-    _LOGGER.warning(
+    _LOGGER.debug(
         "number platform: %d candidates with slider, %d entities built",
         candidates, len(entities),
     )
