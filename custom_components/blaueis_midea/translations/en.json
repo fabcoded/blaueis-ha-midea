@@ -37,6 +37,12 @@
           "latest_field_inventory_display": "Latest field inventory report"
         },
         "data_description": {
+          "follow_me_function_configured": "Master availability flag. Tick once you've selected a temperature sensor and reviewed the guards below. While unticked, the on/off switch is hidden from the device card. Unticking force-clears Enabled so the persisted state stays consistent.",
+          "follow_me_function_enabled": "Engage state. Same persistent flag as the on/off switch on the device card — change either, the other reflects it on next refresh. Auto-cleared if Configured is unticked.",
+          "follow_me_function_sensor": "HA temperature-class sensor the AC will track instead of its internal thermistor. Pick a sensor in the room you actually want the AC to regulate.",
+          "follow_me_function_guard_temp_min": "Lower bound for accepted readings (°C). Readings below trigger temp-disable until the sensor recovers. Default −15 °C.",
+          "follow_me_function_guard_temp_max": "Upper bound for accepted readings (°C). Readings above trigger temp-disable. Catches the common °F-as-°C misconfiguration (a 72 °F reading reported as 72 trips the default 40 °C guard).",
+          "follow_me_function_safety_timeout": "Maximum sensor age in seconds before the reading is considered stale and Follow Me temp-disables. Catches sensors that stop updating without going to 'unavailable'. Default 300 s.",
           "display_buzzer_mode": "Controls the AC display LED and, by extension, the buzzer. Non-enforced lets you control the display freely; Forced modes keep the display in the selected state and the integration re-asserts it if the remote changes it.",
           "glossary_overrides_yaml": "Developer / debugging only — leave empty for normal operation. See the integration README for the override format and examples.",
           "run_inventory_scan_now": "Tick and save to trigger a fresh field-inventory scan. Takes ~10-15 s; reopen Configure afterwards to see the result below. Each scan replaces the single cached entry — no history accumulates.",

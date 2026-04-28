@@ -171,6 +171,17 @@ read and write `follow_me_function_enabled`. Either changes:
 Auto-start on boot fires when `Configured AND Enabled AND sensor` are
 all set.
 
+### Invariant: Configured ⇒ Enabled
+
+When the user unticks **Configured**, `_enforce_fmf_invariant` writes
+`Enabled = False` back to the entry options before the FM manager and
+the visibility helper run. The persisted state always satisfies
+`Configured=False ⇒ Enabled=False`, so re-ticking Configured later
+does not silently re-arm Follow Me from a stale Enabled flag — the
+user must explicitly tick Enabled again. The same check runs at
+`async_setup_entry` so a hand-edited or pre-invariant `core.config_entries`
+file gets normalised on the next HA boot.
+
 ### Legacy key migration (one-shot, automatic)
 
 Pre-rename installs used `follow_me_function_enabled` for the master

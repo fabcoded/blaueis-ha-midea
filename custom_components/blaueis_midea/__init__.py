@@ -124,6 +124,12 @@ async def async_setup_entry(
 
     fm = coordinator.blaueis_follow_me
     fm.configure_guards(entry.options)
+    # Invariant: Enabled cannot outlive Configured. If a stored
+    # combination has Configured=False with Enabled=True (e.g. from a
+    # hand-edited config_entries.json or a pre-invariant install),
+    # normalise once at setup so the FM manager and the entity
+    # registry visibility helper see consistent state.
+    _enforce_fmf_invariant(hass, entry)
     configured = entry.options.get(CONF_FMF_CONFIGURED, False)
     enabled = entry.options.get(CONF_FMF_ENABLED, False)
     source = entry.options.get(CONF_FMF_SENSOR)
@@ -164,6 +170,15 @@ async def _async_options_updated(
 ) -> None:
     """Reconcile Follow Me Function + Display/Buzzer mode with runtime state."""
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
+
+    # Enforce the Configured ⇒ Enabled invariant before reading state.
+    # If the user just unticked Configured while Enabled was still on,
+    # this writes Enabled=False back to options. async_update_entry
+    # re-fires this listener, so we early-return and let the second
+    # pass do the actual reconciliation against the corrected state.
+    if _enforce_fmf_invariant(hass, entry):
+        return
+
     configured = entry.options.get(CONF_FMF_CONFIGURED, False)
     enabled = entry.options.get(CONF_FMF_ENABLED, False)
     source = entry.options.get(CONF_FMF_SENSOR)
@@ -344,6 +359,39 @@ def _migrate_fmf_keys(
             "follow_me_function_configured, follow_me_function_enabled"
         )
         hass.config_entries.async_update_entry(entry, options=opts)
+
+
+# ── Follow Me invariant: Configured ⇒ Enabled ─────────────────────────
+
+def _enforce_fmf_invariant(
+    hass: HomeAssistant, entry: BlaueisMideaConfigEntry,
+) -> bool:
+    """Force-clear the Enabled flag when Configured is off.
+
+    Returns True if a correction was applied (caller should treat it
+    as a re-fire-pending). Returns False when the state was already
+    consistent and no write happened.
+
+    Rationale: the on/off switch on the device card and the menu's
+    "Enabled" checkbox are the same persistent flag. When the user
+    unticks Configured (e.g. they're tearing down the integration or
+    swapping sensors), letting Enabled stay True would silently arm
+    Follow Me again the moment they re-tick Configured — dangerous
+    given Follow Me overrides the AC's own thermistor reading. Auto-
+    clearing keeps the persisted state matching the user's intent at
+    the time of the last save.
+    """
+    configured = entry.options.get(CONF_FMF_CONFIGURED, False)
+    enabled = entry.options.get(CONF_FMF_ENABLED, False)
+    if configured or not enabled:
+        return False
+    new_opts = {**entry.options, CONF_FMF_ENABLED: False}
+    hass.config_entries.async_update_entry(entry, options=new_opts)
+    _LOGGER.info(
+        "Follow Me: Configured=False — auto-clearing Enabled "
+        "to keep persisted state consistent"
+    )
+    return True
 
 
 # ── Follow Me switch visibility ─────────────────────────────────────────
