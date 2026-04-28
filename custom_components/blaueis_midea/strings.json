@@ -25,7 +25,8 @@
         "title": "Blaueis Midea AC",
         "description": "Configure Follow Me, Display & Buzzer mode default, and (Advanced) glossary overrides. {override_error}",
         "data": {
-          "follow_me_function_enabled": "Follow Me — Enable",
+          "follow_me_function_configured": "Follow Me — Configured",
+          "follow_me_function_enabled": "Follow Me — Enabled",
           "follow_me_function_sensor": "Follow Me — Temperature sensor",
           "follow_me_function_guard_temp_min": "Follow Me — Minimum temperature guard (°C)",
           "follow_me_function_guard_temp_max": "Follow Me — Maximum temperature guard (°C)",

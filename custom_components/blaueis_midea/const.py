@@ -59,7 +59,19 @@ FIELD_CLASS_MAP = {
 }
 
 # ── Follow Me Function config options ─────────────────────
-CONF_FMF_ENGAGED          = "follow_me_function_armed"
+# CONF_FMF_CONFIGURED  — master availability flag. "Is this feature
+#                        properly set up?" Gates whether the on/off
+#                        switch is shown on the device card.
+# CONF_FMF_ENABLED     — engage state. The on/off switch IS this option:
+#                        toggle the switch → the option flips, save
+#                        the option → the switch reflects the new state.
+# Both flags appear in the Configure menu; only the Enabled one also
+# surfaces as a switch on the device card (and only when Configured).
+#
+# Storage keys preserved across restarts via entry.options. Legacy keys
+# (``follow_me_function_enabled`` for old master, ``follow_me_function_armed``
+# for old engage) are migrated by ``_migrate_fmf_keys`` in __init__.py.
+CONF_FMF_CONFIGURED     = "follow_me_function_configured"
 CONF_FMF_ENABLED        = "follow_me_function_enabled"
 CONF_FMF_GUARD_TEMP_MAX = "follow_me_function_guard_temp_max"
 CONF_FMF_GUARD_TEMP_MIN = "follow_me_function_guard_temp_min"

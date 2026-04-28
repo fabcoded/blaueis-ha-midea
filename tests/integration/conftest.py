@@ -94,6 +94,7 @@ def mock_config_entry() -> MockConfigEntry:
             "psk": "00" * 16,  # placeholder PSK — tests bypass crypto
         },
         options={
+            "follow_me_function_configured": False,
             "follow_me_function_enabled": False,
             "follow_me_function_guard_temp_max": 40.0,
             "follow_me_function_guard_temp_min": -15.0,

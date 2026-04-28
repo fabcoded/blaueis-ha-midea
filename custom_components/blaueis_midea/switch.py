@@ -15,8 +15,8 @@ from . import BlaueisMideaConfigEntry
 from ._set_result import check_set_result
 from ._ux_mixin import field_ux_available
 from .const import (
+    CONF_FMF_CONFIGURED,
     CONF_FMF_ENABLED,
-    CONF_FMF_ENGAGED,
     CONF_FMF_SENSOR,
 )
 from .coordinator import BlaueisMideaCoordinator
@@ -107,8 +107,17 @@ class BlaueisMideaSwitch(SwitchEntity):
 class BlauiesFollowMeSwitch(SwitchEntity):
     """Engage/disengage switch for the Follow Me Function.
 
-    Gated by CONF_FMF_ENABLED — unavailable when the feature is disabled
-    in config. Toggle writes CONF_FMF_ENGAGED to persist across restarts.
+    Always registered (so the entity_id stays stable across master-flag
+    flips). Visibility on the device card is controlled separately via
+    ``entity_registry.hidden_by`` — see ``_sync_fm_switch_visibility``
+    in ``__init__.py`` — which the integration sets/clears whenever the
+    Configured master flag changes.
+
+    The switch's ``is_on`` reads ``CONF_FMF_ENABLED`` from the config
+    entry options, and toggling writes the same option. That option is
+    also the second checkbox in the Configure menu, so the device-card
+    switch and the menu's "Enabled" toggle are the same persistent
+    flag — change either, the other reflects it.
     """
 
     _attr_has_entity_name = True
@@ -151,17 +160,23 @@ class BlauiesFollowMeSwitch(SwitchEntity):
 
     @property
     def available(self) -> bool:
-        enabled = self._entry.options.get(CONF_FMF_ENABLED, False)
-        if not enabled:
+        # Configured gates *visibility* (via hidden_by); availability
+        # gates whether the user can actually toggle. Belt-and-braces:
+        # if for any reason the entity were exposed while Configured is
+        # off, refuse to act anyway.
+        if not self._entry.options.get(CONF_FMF_CONFIGURED, False):
             return False
-        connected = self._coord.connected
-        power = self._coord.device.read("power")
-        source = self._entry.options.get(CONF_FMF_SENSOR)
-        return bool(connected and power and source)
+        if not self._coord.connected:
+            return False
+        if not self._coord.device.read("power"):
+            return False
+        if not self._entry.options.get(CONF_FMF_SENSOR):
+            return False
+        return True
 
     @property
     def is_on(self) -> bool:
-        return bool(self._entry.options.get(CONF_FMF_ENGAGED, False))
+        return bool(self._entry.options.get(CONF_FMF_ENABLED, False))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         source = self._entry.options.get(CONF_FMF_SENSOR)
@@ -173,7 +188,7 @@ class BlauiesFollowMeSwitch(SwitchEntity):
         await self._coord.blaueis_follow_me.async_start(source)
         self.hass.config_entries.async_update_entry(
             self._entry,
-            options={**self._entry.options, CONF_FMF_ENGAGED: True},
+            options={**self._entry.options, CONF_FMF_ENABLED: True},
         )
         self.async_write_ha_state()
 
@@ -181,6 +196,6 @@ class BlauiesFollowMeSwitch(SwitchEntity):
         await self._coord.blaueis_follow_me.async_stop()
         self.hass.config_entries.async_update_entry(
             self._entry,
-            options={**self._entry.options, CONF_FMF_ENGAGED: False},
+            options={**self._entry.options, CONF_FMF_ENABLED: False},
         )
         self.async_write_ha_state()

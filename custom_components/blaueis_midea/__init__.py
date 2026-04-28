@@ -26,7 +26,7 @@ from ._glossary_override import (  # noqa: E402
 )
 from .const import (  # noqa: E402
     CONF_DISPLAY_BUZZER_MODE,
-    CONF_FMF_ENGAGED,
+    CONF_FMF_CONFIGURED,
     CONF_FMF_ENABLED,
     CONF_FMF_SENSOR,
     CONF_GLOSSARY_OVERRIDES,
@@ -98,6 +98,7 @@ async def async_setup_entry(
 
     _migrate_renamed_unique_ids(hass, entry)
     _migrate_display_buzzer_options(hass, entry)
+    _migrate_fmf_keys(hass, entry)
 
     debug_ring = _install_debug_ring(entry)
 
@@ -123,10 +124,10 @@ async def async_setup_entry(
 
     fm = coordinator.blaueis_follow_me
     fm.configure_guards(entry.options)
+    configured = entry.options.get(CONF_FMF_CONFIGURED, False)
     enabled = entry.options.get(CONF_FMF_ENABLED, False)
-    armed = entry.options.get(CONF_FMF_ENGAGED, False)
     source = entry.options.get(CONF_FMF_SENSOR)
-    if enabled and armed and source:
+    if configured and enabled and source:
         try:
             await fm.async_start(source)
         except Exception:
@@ -140,6 +141,14 @@ async def async_setup_entry(
     # entities left behind by cap changes (B5 update, override flip,
     # firmware repair) without per-field bespoke migration code.
     _cleanup_orphaned_field_entities(hass, entry, coordinator)
+
+    # Sync the Follow Me switch's hidden_by flag so it's visible on the
+    # device card iff the master "Configured" flag is on. Hides via the
+    # entity registry rather than removing — the entity stays registered
+    # with a stable entity_id, and toggling Configured just shows/hides
+    # it. Avoids the entity_id-recreation issue that would happen with
+    # remove + re-register on every flip.
+    _sync_fm_switch_visibility(hass, entry, coordinator)
 
     # Register the field-inventory service + HTTP view (global,
     # registered on first entry setup; no-op on subsequent entries).
@@ -155,12 +164,12 @@ async def _async_options_updated(
 ) -> None:
     """Reconcile Follow Me Function + Display/Buzzer mode with runtime state."""
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
+    configured = entry.options.get(CONF_FMF_CONFIGURED, False)
     enabled = entry.options.get(CONF_FMF_ENABLED, False)
-    armed = entry.options.get(CONF_FMF_ENGAGED, False)
     source = entry.options.get(CONF_FMF_SENSOR)
     fm = coordinator.blaueis_follow_me
 
-    if enabled and armed and source:
+    if configured and enabled and source:
         fm.configure_guards(entry.options)
         if fm.active:
             if fm.source_entity_id != source:
@@ -172,6 +181,8 @@ async def _async_options_updated(
         if fm.active or fm._stopping:
             await fm.async_stop()
 
+    # Mirror Configured → switch visibility via the entity registry.
+    _sync_fm_switch_visibility(hass, entry, coordinator)
     coordinator.fire_entity_callbacks("follow_me")
     # Notify the Display & Buzzer mode select that its backing option may
     # have changed. The entity registers a callback on this synthetic
@@ -290,6 +301,86 @@ def _override_changed(entry: BlaueisMideaConfigEntry) -> bool:
     current = entry.options.get(CONF_GLOSSARY_OVERRIDES, "") or ""
     applied = getattr(coord, "_applied_override_yaml", "") or ""
     return current != applied
+
+
+# ── Follow Me Function key migration ────────────────────────────────────
+
+def _migrate_fmf_keys(
+    hass: HomeAssistant, entry: BlaueisMideaConfigEntry,
+) -> None:
+    """Rewrite legacy Follow Me option keys to their new names.
+
+    The flag semantics are unchanged; only the key strings move so the
+    storage names match the user-visible labels:
+
+      ``follow_me_function_enabled`` (old master)  → ``follow_me_function_configured``
+      ``follow_me_function_armed``   (old engage)  → ``follow_me_function_enabled``
+
+    Order matters — rename the master first, freeing the
+    ``follow_me_function_enabled`` slot for the engage flag's new home.
+    Idempotent: a second call is a no-op once the new keys are present.
+    """
+    opts = dict(entry.options)
+    changed = False
+
+    OLD_MASTER = "follow_me_function_enabled"
+    OLD_ENGAGE = "follow_me_function_armed"
+    NEW_MASTER = "follow_me_function_configured"
+    NEW_ENGAGE = "follow_me_function_enabled"
+
+    # Step 1: old master → new master (frees OLD_MASTER for step 2).
+    if OLD_MASTER in opts and NEW_MASTER not in opts:
+        opts[NEW_MASTER] = opts.pop(OLD_MASTER)
+        changed = True
+
+    # Step 2: old engage → new engage (which lives at OLD_MASTER's name).
+    if OLD_ENGAGE in opts and NEW_ENGAGE not in opts:
+        opts[NEW_ENGAGE] = opts.pop(OLD_ENGAGE)
+        changed = True
+
+    if changed:
+        _LOGGER.info(
+            "Follow Me: migrated legacy option keys → "
+            "follow_me_function_configured, follow_me_function_enabled"
+        )
+        hass.config_entries.async_update_entry(entry, options=opts)
+
+
+# ── Follow Me switch visibility ─────────────────────────────────────────
+
+def _sync_fm_switch_visibility(
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
+    coordinator: BlaueisMideaCoordinator,
+) -> None:
+    """Show/hide the Follow Me switch on the device card based on
+    the ``Configured`` master flag.
+
+    Uses ``entity_registry.hidden_by="integration"`` rather than
+    removing the registry entry — the entity stays at its stable
+    entity_id, so toggling ``Configured`` doesn't reshuffle naming or
+    break automations referencing the entity. The switch is always
+    *registered*; visibility is the only thing this function controls.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    reg = er.async_get(hass)
+    unique_id = f"{coordinator.host}_{coordinator.port}_blaueis_follow_me"
+    ent_id = reg.async_get_entity_id("switch", DOMAIN, unique_id)
+    if ent_id is None:
+        return  # switch not yet registered (first setup, racing)
+
+    configured = entry.options.get(CONF_FMF_CONFIGURED, False)
+    desired = None if configured else er.RegistryEntryHider.INTEGRATION
+    current = reg.async_get(ent_id)
+    if current is None or current.hidden_by == desired:
+        return
+
+    reg.async_update_entity(ent_id, hidden_by=desired)
+    _LOGGER.info(
+        "Follow Me switch %s: hidden_by → %s (Configured=%s)",
+        ent_id, desired, configured,
+    )
 
 
 # ── Display & Buzzer mode migration ────────────────────────────────────

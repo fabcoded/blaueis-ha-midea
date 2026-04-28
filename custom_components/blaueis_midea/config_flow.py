@@ -19,6 +19,7 @@ from ._glossary_override import (
 )
 from .const import (
     CONF_DISPLAY_BUZZER_MODE,
+    CONF_FMF_CONFIGURED,
     CONF_FMF_ENABLED,
     CONF_FMF_GUARD_TEMP_MAX,
     CONF_FMF_GUARD_TEMP_MIN,
@@ -247,6 +248,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             current_dbm = DISPLAY_BUZZER_POLICY_NON_ENFORCED
 
         schema_dict: dict = {
+            # Two-flag safety design (see docs/follow_me_function.md §3):
+            # Configured = "feature is properly set up"; Enabled = the
+            # engage state (same persistent flag as the on/off switch
+            # on the device card). Both always shown so the user can
+            # set up + arm in one form pass.
+            vol.Optional(
+                CONF_FMF_CONFIGURED,
+                default=opts.get(CONF_FMF_CONFIGURED, False),
+            ): bool,
             vol.Optional(
                 CONF_FMF_ENABLED,
                 default=opts.get(CONF_FMF_ENABLED, False),
