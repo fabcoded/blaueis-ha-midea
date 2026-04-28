@@ -121,7 +121,11 @@ class BlauiesFollowMeSwitch(SwitchEntity):
     """
 
     _attr_has_entity_name = True
-    _attr_name = "Follow Me Function"
+    # Display name matches the Configure menu's checkbox label exactly —
+    # the switch IS the same persistent flag as "Follow Me — Enabled" in
+    # the form, so the user-facing names should be identical. Entity ID
+    # in the registry is unaffected (HA only changes friendly_name).
+    _attr_name = "Follow Me — Enabled"
     should_poll = False
 
     def __init__(
