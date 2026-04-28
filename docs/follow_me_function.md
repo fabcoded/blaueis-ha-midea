@@ -99,28 +99,84 @@ This is event-driven, not periodic:
 
 ---
 
-## 3. Configuration
+## 3. Configuration — two-flag safety design
+
+Follow Me overrides the AC's own thermistor with an external sensor. A
+misconfigured external sensor (wrong room, wrong unit, dead battery)
+can drive heating / cooling badly. To make accidental activation
+hard, the integration uses **two distinct flags** plus the sensor +
+guard configuration. Both flags persist across HA restarts.
 
 Open **Settings > Devices & Services > Blaueis Midea AC > Configure**.
 
-| Option | Key | Default | Range | Description |
+| Option | Storage key | Label | Default | Description |
 |---|---|---|---|---|
-| Enable | `follow_me_function_enabled` | `false` | bool | Persistent on/off toggle |
-| Sensor | `follow_me_function_sensor` | — | entity | HA temperature sensor entity |
-| Guard min | `follow_me_function_guard_temp_min` | `-15` | -40..10 | Lower temperature bound (°C) |
-| Guard max | `follow_me_function_guard_temp_max` | `40` | 25..50 | Upper temperature bound (°C) |
-| Timeout | `follow_me_function_safety_timeout` | `300` | 60..3600 | Max sensor age in seconds |
+| Configured | `follow_me_function_configured` | "Follow Me — Configured" | `false` | Master availability. Are you set up and ready to use this feature? Hides/shows the on/off switch on the device card. |
+| Enabled | `follow_me_function_enabled` | "Follow Me — Enabled" | `false` | Engage state. Same persistent flag as the on/off switch on the device card — change either, the other reflects it. |
+| Sensor | `follow_me_function_sensor` | "Follow Me — Temperature sensor" | — | HA temperature-class sensor entity. |
+| Guard min | `follow_me_function_guard_temp_min` | "Follow Me — Minimum temperature guard (°C)" | `-15` | Lower temperature bound (°C). Range -40..10. |
+| Guard max | `follow_me_function_guard_temp_max` | "Follow Me — Maximum temperature guard (°C)" | `40` | Upper temperature bound (°C). Range 25..50. |
+| Timeout | `follow_me_function_safety_timeout` | "Follow Me — Sensor timeout (seconds)" | `300` | Max sensor age in seconds. Range 60..3600. |
 
-### Switch entity
+The two flags do different jobs:
 
-The **Follow Me Function** switch reflects the persistent desired state
-(config option), not the runtime state. This means:
+| Flag | Storage key | Role | Surface |
+|---|---|---|---|
+| Configured | `follow_me_function_configured` | "Is this feature set up and ready?" | Configure menu only |
+| Enabled | `follow_me_function_enabled` | "Is Follow Me running right now?" | Configure menu **and** the on/off switch on the device card |
 
-- Switch shows ON even when temporarily disabled (sensor lost) — the *intent*
-  is still to run Follow Me.
-- Toggling the switch writes `follow_me_function_enabled` to the config entry
-  options, persisting across HA restarts.
-- The `follow_me` binary sensor (protocol layer) shows the AC's actual state.
+### Lifecycle of the on/off switch
+
+```
+Configured           Enabled             What you see
+──────────           ──────────          ─────────────────────────────
+False                any                 (no switch on device card —
+                                          hidden via entity-registry
+                                          hidden_by="integration")
+
+True                 False               Switch visible, OFF
+                                          (manager idle)
+
+True                 True
+   sensor unset      —                   Switch visible, "Unavailable"
+                                          (configured but no source)
+
+True                 True
+   sensor set
+   AC powered off    —                   Switch visible, "Unavailable"
+
+True                 True
+   sensor set
+   AC on, gateway up —                   Switch visible, ON
+                                          (manager engaged)
+```
+
+The switch is **always registered** in the entity registry with a
+stable entity_id. Visibility is controlled separately via
+``entity_registry.hidden_by`` — `_sync_fm_switch_visibility` in
+`__init__.py` sets / clears this field whenever the Configured master
+flag changes. Existing automations referencing the entity stay valid
+across Configured flips.
+
+### Coupling between menu and device card
+
+The menu's "Enabled" and the on/off switch on the device card both
+read and write `follow_me_function_enabled`. Either changes:
+
+- the other reflects on next refresh
+- `_async_options_updated` sees the flip and starts/stops the manager
+  (when `Configured AND Enabled AND sensor` evaluates true/false)
+- the new value persists to entry options → survives HA restart
+
+Auto-start on boot fires when `Configured AND Enabled AND sensor` are
+all set.
+
+### Legacy key migration (one-shot, automatic)
+
+Pre-rename installs used `follow_me_function_enabled` for the master
+flag and `follow_me_function_armed` for engage. `_migrate_fmf_keys` at
+setup_entry time renames both, in order, preserving the user's
+existing values. Idempotent: a second call is a no-op.
 
 ---
 
