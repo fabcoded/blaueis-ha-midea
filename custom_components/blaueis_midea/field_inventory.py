@@ -74,6 +74,9 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_RUN_FIELD_INVENTORY = "run_field_inventory"
 
+# Keep field set + types in sync with services.yaml. This schema defaults
+# to PREVENT_EXTRA, so a YAML field without a matching key here will fail
+# the call with "extra keys not allowed".
 SERVICE_SCHEMA = vol.Schema(
     {
         vol.Required("label"): vol.All(str, vol.Length(min=1, max=64)),

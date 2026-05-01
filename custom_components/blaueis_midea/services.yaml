@@ -1,0 +1,30 @@
+run_field_inventory:
+  name: Run field inventory scan
+  description: >-
+    Inject a superset of read-query frames, capture replies, and produce a
+    markdown report of which fields populated. Auto-diffs against the prior
+    snapshot for the same entry, if any.
+  fields:
+    label:
+      name: Label
+      description: Short state tag for the report header (e.g. "cooling-20C-from-22").
+      required: true
+      example: "cooling-20C-from-22"
+      selector:
+        text:
+    suggest_overrides:
+      name: Suggest glossary overrides
+      description: >-
+        Append YAML override snippets to the report for fields cap-gated to "never"
+        but observed populated.
+      default: true
+      selector:
+        boolean:
+    reset_prior:
+      name: Reset prior snapshot
+      description: >-
+        Ignore any existing snapshot — produces a baseline report with no diff
+        section. Use after firmware changes invalidate the baseline.
+      default: false
+      selector:
+        boolean:
