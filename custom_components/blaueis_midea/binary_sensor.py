@@ -37,10 +37,13 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
         self._attr_unique_id = (
             f"{coordinator.host}_{coordinator.port}_{self._field_name}"
         )
-        self._attr_name = self._field_name.replace("_", " ").title()
 
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         ha_meta = gdef.get("ha") or {}
+        # Label from glossary (preferred) or mechanical title-case fallback.
+        self._attr_name = (
+            gdef.get("label") or self._field_name.replace("_", " ").title()
+        )
         if "entity_category" in ha_meta:
             from homeassistant.helpers.entity import EntityCategory
             self._attr_entity_category = EntityCategory(ha_meta["entity_category"])

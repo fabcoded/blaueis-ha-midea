@@ -63,10 +63,13 @@ class BlaueisMideaSwitch(SwitchEntity):
         self._attr_unique_id = (
             f"{coordinator.host}_{coordinator.port}_{self._field_name}"
         )
-        self._attr_name = self._field_name.replace("_", " ").title()
 
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         ha_meta = gdef.get("ha") or {}
+        # Label from glossary (preferred) or mechanical title-case fallback.
+        self._attr_name = (
+            gdef.get("label") or self._field_name.replace("_", " ").title()
+        )
         if ha_meta.get("enabled_default") is False:
             self._attr_entity_registry_enabled_default = False
 

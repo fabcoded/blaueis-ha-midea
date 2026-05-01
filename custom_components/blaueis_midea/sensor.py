@@ -89,15 +89,19 @@ class BlaueisMideaSensor(SensorEntity):
         self._attr_unique_id = (
             f"{coordinator.host}_{coordinator.port}_{self._field_name}"
         )
-        self._attr_name = self._field_name.replace("_", " ").title()
 
-        # HA entity metadata (device_class, state_class, unit, precision) comes
-        # from the glossary's per-field `ha:` block when present — declarative
-        # path. Falls back to the hardcoded SENSOR_DEVICE_CLASS map for the
-        # fields that haven't been migrated yet; that map will shrink to empty
-        # as glossary entries gain their `ha:` blocks.
+        # HA entity metadata (device_class, state_class, unit, precision,
+        # display label) comes from the glossary's per-field `ha:` block
+        # and top-level `label:` when present — declarative path. Label
+        # falls back to mechanical title-case of the field name; other
+        # attributes fall back to the hardcoded SENSOR_DEVICE_CLASS map
+        # for fields not yet migrated. Both maps will shrink to empty
+        # as glossary entries gain their declarative metadata.
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         ha_meta = gdef.get("ha") or {}
+        self._attr_name = (
+            gdef.get("label") or self._field_name.replace("_", " ").title()
+        )
         if "device_class" in ha_meta:
             self._attr_device_class = ha_meta["device_class"]
         if "state_class" in ha_meta:
