@@ -34,7 +34,13 @@ async def async_setup_entry(
     for desc in coordinator.get_entities_for_platform("switch"):
         entities.append(BlaueisMideaSwitch(coordinator, entry, desc))
 
-    entities.append(BlauiesFollowMeSwitch(coordinator, entry))
+    # Stash the add-entities callback so __init__.py can dynamically
+    # add the Follow Me switch later when Configured flips on, without
+    # reloading the entry.
+    coordinator._fm_switch_add_entities = async_add_entities
+
+    if entry.options.get(CONF_FMF_CONFIGURED, False):
+        entities.append(BlauiesFollowMeSwitch(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -107,11 +113,12 @@ class BlaueisMideaSwitch(SwitchEntity):
 class BlauiesFollowMeSwitch(SwitchEntity):
     """Engage/disengage switch for the Follow Me Function.
 
-    Always registered (so the entity_id stays stable across master-flag
-    flips). Visibility on the device card is controlled separately via
-    ``entity_registry.hidden_by`` — see ``_sync_fm_switch_visibility``
-    in ``__init__.py`` — which the integration sets/clears whenever the
-    Configured master flag changes.
+    Registered only while the master ``CONF_FMF_CONFIGURED`` flag is
+    on. When the user unticks Configured, ``_sync_fm_switch_registration``
+    in ``__init__.py`` purges the entity from the registry; ticking it
+    back on dynamically re-adds the switch via the saved
+    ``async_add_entities`` callback. The unique_id is stable, so HA
+    re-uses the same ``entity_id`` across the round-trip.
 
     The switch's ``is_on`` reads ``CONF_FMF_ENABLED`` from the config
     entry options, and toggling writes the same option. That option is
@@ -140,6 +147,16 @@ class BlauiesFollowMeSwitch(SwitchEntity):
         )
 
     async def async_added_to_hass(self) -> None:
+        # Clear any stale hidden_by carried over from earlier versions
+        # that used the "hide-by-config" pattern. HA preserves hidden_by
+        # on re-registration via the deleted_entities track, so without
+        # this our purge → re-add cycle would silently keep the switch
+        # hidden on the device card.
+        from homeassistant.helpers import entity_registry as er
+        reg = er.async_get(self.hass)
+        cur = reg.async_get(self.entity_id)
+        if cur is not None and cur.hidden_by is not None:
+            reg.async_update_entity(self.entity_id, hidden_by=None)
         self._coord.register_entity_callback(
             "follow_me", self.async_write_ha_state
         )
@@ -164,12 +181,9 @@ class BlauiesFollowMeSwitch(SwitchEntity):
 
     @property
     def available(self) -> bool:
-        # Configured gates *visibility* (via hidden_by); availability
-        # gates whether the user can actually toggle. Belt-and-braces:
-        # if for any reason the entity were exposed while Configured is
-        # off, refuse to act anyway.
-        if not self._entry.options.get(CONF_FMF_CONFIGURED, False):
-            return False
+        # Configured is enforced at registration time — when the user
+        # unticks Configured the entity is purged from the registry,
+        # so reaching this property implies Configured=True.
         if not self._coord.connected:
             return False
         if not self._coord.device.read("power"):

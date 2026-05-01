@@ -130,9 +130,10 @@ The two flags do different jobs:
 ```
 Configured           Enabled             What you see
 ──────────           ──────────          ─────────────────────────────
-False                any                 (no switch on device card —
-                                          hidden via entity-registry
-                                          hidden_by="integration")
+False                any                 (no switch — entity purged
+                                          from the registry; queries
+                                          for the entity_id return
+                                          404 / "not found")
 
 True                 False               Switch visible, OFF
                                           (manager idle)
@@ -151,12 +152,32 @@ True                 True
                                           (manager engaged)
 ```
 
-The switch is **always registered** in the entity registry with a
-stable entity_id. Visibility is controlled separately via
-``entity_registry.hidden_by`` — `_sync_fm_switch_visibility` in
-`__init__.py` sets / clears this field whenever the Configured master
-flag changes. Existing automations referencing the entity stay valid
-across Configured flips.
+The switch is **registered only while Configured is on**. Toggling
+Configured off purges the entity registry entry (graceful: the
+switch's `async_will_remove_from_hass` stops the FM manager); toggling
+it back on dynamically re-adds the switch via the
+`async_add_entities` callback that the switch platform stashes on the
+coordinator at setup. The `unique_id` is stable
+(`{host}_{port}_blaueis_follow_me`), so HA re-uses the same
+`entity_id` across the round-trip — automations and dashboards that
+reference the entity_id stay valid as long as Configured is on when
+they fire. See `_sync_fm_switch_registration` in `__init__.py`.
+
+### Boot / reconnect handshake
+
+When HA (re)connects to the gateway, the device library defers firing
+its `on_connected` callback until **after the first `rsp_0xc0` has been
+ingested**. The switch's `available` therefore only flips True once
+`device.read("power")` (and the rest of the C0 fields) have real
+values — there is no "available with stale/unknown values" window for
+monitoring or automations to trip on at startup or after a gateway
+reconnect.
+
+If the AC is silent (e.g. powered off at the breaker, gateway up but
+UART quiet), the handshake falls through after `INITIAL_STATUS_TIMEOUT`
+(3.0s) and `on_connected` fires anyway — HA still learns about the
+connection so device-card entities stop showing the disconnect-side
+"Unavailable". See `_post_connect_init` in `blaueis.client.device`.
 
 ### Coupling between menu and device card
 

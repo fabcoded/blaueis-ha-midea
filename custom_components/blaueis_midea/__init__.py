@@ -148,13 +148,12 @@ async def async_setup_entry(
     # firmware repair) without per-field bespoke migration code.
     _cleanup_orphaned_field_entities(hass, entry, coordinator)
 
-    # Sync the Follow Me switch's hidden_by flag so it's visible on the
-    # device card iff the master "Configured" flag is on. Hides via the
-    # entity registry rather than removing — the entity stays registered
-    # with a stable entity_id, and toggling Configured just shows/hides
-    # it. Avoids the entity_id-recreation issue that would happen with
-    # remove + re-register on every flip.
-    _sync_fm_switch_visibility(hass, entry, coordinator)
+    # Reconcile the Follow Me switch's registration with the master
+    # "Configured" flag. Adds the switch dynamically when Configured is
+    # on (and somehow missing), purges it from the entity registry when
+    # Configured is off. The unique_id is stable, so HA re-uses the
+    # same entity_id when the switch is added back.
+    _sync_fm_switch_registration(hass, entry, coordinator)
 
     # Register the field-inventory service + HTTP view (global,
     # registered on first entry setup; no-op on subsequent entries).
@@ -196,8 +195,8 @@ async def _async_options_updated(
         if fm.active or fm._stopping:
             await fm.async_stop()
 
-    # Mirror Configured → switch visibility via the entity registry.
-    _sync_fm_switch_visibility(hass, entry, coordinator)
+    # Mirror Configured → switch registration (add or purge).
+    _sync_fm_switch_registration(hass, entry, coordinator)
     coordinator.fire_entity_callbacks("follow_me")
     # Notify the Display & Buzzer mode select that its backing option may
     # have changed. The entity registers a callback on this synthetic
@@ -394,41 +393,50 @@ def _enforce_fmf_invariant(
     return True
 
 
-# ── Follow Me switch visibility ─────────────────────────────────────────
+# ── Follow Me switch registration ───────────────────────────────────────
 
-def _sync_fm_switch_visibility(
+def _sync_fm_switch_registration(
     hass: HomeAssistant,
     entry: BlaueisMideaConfigEntry,
     coordinator: BlaueisMideaCoordinator,
 ) -> None:
-    """Show/hide the Follow Me switch on the device card based on
-    the ``Configured`` master flag.
+    """Add or purge the Follow Me switch to match the ``Configured``
+    master flag.
 
-    Uses ``entity_registry.hidden_by="integration"`` rather than
-    removing the registry entry — the entity stays at its stable
-    entity_id, so toggling ``Configured`` doesn't reshuffle naming or
-    break automations referencing the entity. The switch is always
-    *registered*; visibility is the only thing this function controls.
+    Configured=True with the entity missing → dynamic add via the
+    ``async_add_entities`` callback that ``switch.async_setup_entry``
+    stashed on the coordinator. No entry reload required.
+
+    Configured=False with the entity present → ``async_remove`` from
+    the entity registry. The switch's ``async_will_remove_from_hass``
+    handles graceful FM-manager teardown.
+
+    Re-ticking Configured creates a fresh entity instance; HA matches
+    on the stable ``unique_id`` and re-uses the same ``entity_id``.
     """
     from homeassistant.helpers import entity_registry as er
+
+    from .switch import BlauiesFollowMeSwitch
 
     reg = er.async_get(hass)
     unique_id = f"{coordinator.host}_{coordinator.port}_blaueis_follow_me"
     ent_id = reg.async_get_entity_id("switch", DOMAIN, unique_id)
-    if ent_id is None:
-        return  # switch not yet registered (first setup, racing)
-
     configured = entry.options.get(CONF_FMF_CONFIGURED, False)
-    desired = None if configured else er.RegistryEntryHider.INTEGRATION
-    current = reg.async_get(ent_id)
-    if current is None or current.hidden_by == desired:
-        return
 
-    reg.async_update_entity(ent_id, hidden_by=desired)
-    _LOGGER.info(
-        "Follow Me switch %s: hidden_by → %s (Configured=%s)",
-        ent_id, desired, configured,
-    )
+    if configured and ent_id is None:
+        add_entities = getattr(coordinator, "_fm_switch_add_entities", None)
+        if add_entities is None:
+            # switch.async_setup_entry hasn't run yet — it will create
+            # the switch itself when it does, gated on Configured.
+            return
+        add_entities([BlauiesFollowMeSwitch(coordinator, entry)])
+        _LOGGER.info("Follow Me switch added (Configured=True)")
+    elif not configured and ent_id is not None:
+        reg.async_remove(ent_id)
+        _LOGGER.info(
+            "Follow Me switch %s purged from registry (Configured=False)",
+            ent_id,
+        )
 
 
 # ── Display & Buzzer mode migration ────────────────────────────────────
