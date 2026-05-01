@@ -160,5 +160,9 @@ config-entry reload, that's the cause.
 - `__init__.py` — entity-cleanup pass uses the
   `SYNTHETIC_ENTITY_CAP_DEPENDENCIES` map (`const.py`) to extend the
   field-driven sweep to synthetic entities with cap dependencies.
-- `glossary_overrides.md` — user-facing docs for the override feature
-  these traps were discovered building.
+- [`glossary_overrides.md`](./glossary_overrides.md) — user-facing docs
+  for the override feature these traps were discovered building.
+- [`recorder_unit_changes.md`](./recorder_unit_changes.md) — handling
+  the "unit cannot be converted" warning that fires when a glossary
+  edit changes `ha.unit_of_measurement` for an entity with existing
+  long-term statistics; includes the per-Fix-button effect on history.

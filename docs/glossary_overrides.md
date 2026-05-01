@@ -142,3 +142,17 @@ Three options:
   which takes ~2 s. A dedicated `blaueis_midea.reload_glossary_overrides`
   service could shave that further if developer iteration speed
   becomes a constraint.
+
+## See also
+
+- [`recorder_unit_changes.md`](./recorder_unit_changes.md) — what to
+  do with the "unit cannot be converted" warning that fires when an
+  override (or base-glossary edit) adds or changes
+  `ha.unit_of_measurement` for a field that already has long-term
+  statistics history.
+- [`ha_config_flow_gotchas.md`](./ha_config_flow_gotchas.md) — five
+  HA framework behaviours that bite when modifying the config /
+  options flow this override feature plugs into.
+- `disabled_fields.md` (in `blaueis-libmidea/docs/`) — fields with
+  `feature_available: never` and what data the community would need
+  to re-enable each.
