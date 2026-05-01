@@ -7,6 +7,144 @@
 
 ---
 
+## Design philosophy: dual audience by default
+
+The integration deliberately serves two distinct user populations from
+the same install, without forcing either to compromise:
+
+1. **The Home Assistant user** who wants their AC to "just work" —
+   expose climate, fan, and the handful of toggles a wall remote
+   offers, hide the rest, and respect HA conventions (entity
+   categories, device classes, state classes for energy and history
+   graphs, sensible default-on / default-off).
+
+2. **The HVAC enthusiast, integrator, or protocol researcher** who
+   needs unrestricted visibility into the unit's behaviour — every
+   capability the firmware advertises, every diagnostic thermistor,
+   every byte the field-inventory scan classified as populated, plus
+   the tooling to capture and interpret what the wire is carrying.
+
+The reconciliation between these audiences is **structural, not
+editorial**. Three independent axes in the glossary, applied in
+combination, produce a per-field disposition that lands the field on
+the right surface for the right user:
+
+### The three axes
+
+| Axis | Glossary key | Decides |
+|---|---|---|
+| **Existence** | `feature_available` | Whether the entity is registered in HA at all |
+| **Default-active** | `ha.enabled_default` | Whether the entity is on by default once registered |
+| **Visual placement** | `ha.entity_category` | Where the entity renders on the device card |
+
+These are **independent and combine** — they are not alternatives.
+A field can carry zero, one, two, or all three.
+
+#### Axis 1: `feature_available` (the integration's gate)
+
+| Value | Effect |
+|---|---|
+| `never` | Not registered. No HA entity, no state, no row in registry. The field lives in the glossary as documentation; see `disabled_fields.md` (in `blaueis-libmidea`) for the contribution path to promote each. |
+| `capability` | Registered only if the device's B5 capability scan confirms support on this hardware. Cap-discovery does the gating; no manual override needed. |
+| `readable` | Always registered (no cap dependency). |
+| `always` | Always registered + writable from the start. |
+
+#### Axis 2: `ha.enabled_default` (HA registry level)
+
+When `false`, HA stores `disabled_by="integration"` on the entity
+registry row. The entity is registered but **HA does not collect its
+state** — no poll, no history, no statistics, doesn't show on any
+card or in any list of "current entities." It appears in the entity
+registry's *disabled* list, where the user can flip it on. Once
+enabled, the flag clears and the entity behaves normally.
+
+Think of this as **"hidden behind a door the user can open"** —
+applied when the field's *value* may be irrelevant on a given hardware
+variant (humidity sensor not present), confusing (raw bytes), or
+noisy in history graphs.
+
+#### Axis 3: `ha.entity_category: diagnostic` (HA presentation level)
+
+The entity is fully alive — state collected, history recorded,
+automations work, statistics compile. It just renders under a
+collapsible "Diagnostic" subsection of the device card, separate
+from the main controls and primary sensors.
+
+Think of this as **"shelf placement on the same display"** — applied
+when the value is meaningful and we want history, but the average
+user doesn't need it on the front of their device card. Service
+technicians, automation authors, and the "show me how the AC is
+feeling" user expand the Diagnostic section.
+
+### How the axes combine
+
+| feature_available | enabled_default | entity_category | What the user sees |
+|---|---|---|---|
+| `readable` / `always` | (default true) | (none) | **Primary** — top-level on device card, fully active |
+| `readable` / `always` | true | `diagnostic` | **Diagnostic shelf** — under Diagnostic subsection, fully active |
+| `readable` / `always` | **false** | (none) | **Hidden** — opt-in via registry. Once opt-in: Primary |
+| `readable` / `always` | **false** | `diagnostic` | **Hidden** — opt-in via registry. Once opt-in: Diagnostic shelf |
+| `capability` | (any) | (any) | If B5 confirms: behaves per the row above. If not: not registered |
+| `never` | n/a | n/a | **Doesn't exist** — glossary documentation only |
+
+### Worked examples
+
+- `target_temperature`, `power`, `operating_mode` — Axis 1 `always`,
+  no flags on Axes 2 or 3 → **Primary**. Folded into the climate
+  entity; the user controls them directly.
+- `outdoor_temperature` — Axis 1 `readable`, no Axis 2/3 flags →
+  **Primary** standalone sensor. Useful for weather correlations and
+  visible by default.
+- `compressor_frequency`, `t4_outdoor_ambient_temp` — Axis 1
+  `readable`, Axis 3 `diagnostic` → **Diagnostic shelf**. Modulation
+  visibility and raw thermistor reading; useful but not what a
+  typical user looks at on the front of a device card.
+- `humidity_actual` (when uncertain whether the hardware has a
+  sensor) — Axis 1 `readable`, Axis 2 `false` → **Hidden**. User on a
+  premium SKU enables it; user on a basic SKU never sees a
+  no-data-here ghost entity.
+- `vane_*_angle` (per memory: dead sensors) — Axis 1 `never` →
+  **Doesn't exist**. Promoting back requires evidence per
+  `disabled_fields.md`.
+
+### What this is NOT
+
+- **Not a permissions model.** All three axes are user-overridable in
+  the standard HA UI: the user can enable any disabled-by-default
+  entity, expand any Diagnostic shelf, and remove any
+  `enabled_default: false` constraint via Settings → Devices →
+  Entities. The integration's defaults express *expectations*, not
+  hard locks.
+- **Not editorial curation.** No "we don't want users to see this"
+  decisions. A field is hidden because either (a) its data is not
+  reliable on the available evidence (`feature_available: never`,
+  see `disabled_fields.md`), (b) its hardware presence varies across
+  SKUs (`enabled_default: false`), or (c) its information density is
+  too high for the front of a device card
+  (`entity_category: diagnostic`). All three conditions are
+  documentable; none are taste.
+
+### Tinkerer surfaces
+
+Capability layered on top of, not replacing, the default-clean
+experience:
+
+- **`run_field_inventory` HA service** — injects a superset of read
+  queries and produces a markdown report of which bytes populate.
+  See `field_inventory.md`.
+- **Glossary overrides (`glossary_overrides_yaml`)** — per-instance
+  YAML patch over the canonical glossary, applied at entry load.
+  See `glossary_overrides.md`.
+- **Flight recorder** — gateway-side full-frame capture for protocol
+  research. See `../blaueis-libmidea/docs/flight_recorder.md`.
+
+The result is **one integration, two surfaces**: the default surface
+shaped by what HA users expect on a device card, the investigative
+surface one toggle / one menu / one service call away — never deeper,
+never present where it would clutter the default view.
+
+---
+
 ## 1. Requirements
 
 - Home Assistant 2024.10+ (for `type BlaueisMideaConfigEntry = ConfigEntry[...]` syntax).
