@@ -44,6 +44,9 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
         self._attr_name = (
             gdef.get("label") or self._field_name.replace("_", " ").title()
         )
+        if "device_class" in ha_meta:
+            from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+            self._attr_device_class = BinarySensorDeviceClass(ha_meta["device_class"])
         if "entity_category" in ha_meta:
             from homeassistant.helpers.entity import EntityCategory
             self._attr_entity_category = EntityCategory(ha_meta["entity_category"])

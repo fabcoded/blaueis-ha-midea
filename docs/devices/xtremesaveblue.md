@@ -27,8 +27,15 @@ Plus these diagnostic dead-ends (all must hold):
 
 And these behavioural signatures that surface in day-to-day decode:
 
-- `compressor_idle` bit is **inverted** (`1` = idle, `0` = running) —
-  OEM mobile app mislabels it as "compressor current"
+- `compressor_running` bit is unreliable — the wire reports `body[6]=0`
+  always on this firmware regardless of compressor state. The codec
+  inverts the bit (matching the more common idle/running interpretation
+  on units where the bit actually tracks compressor state), so on this
+  firmware the field would surface as `compressor_running=true` 24/7
+  if enabled. Glossary defaults the field to `enabled_default: false`;
+  this profile leaves it disabled. (An alternative community-research
+  interpretation labels the byte as "compressor current," which the
+  live data does not support — see the glossary note for details.)
 - Louver swing-angle sensors return constants, not live positions
 - Buzzer is globally gated by the display-LED latch
   (`rsp_0xC0 body[14] bits[6:4]`); silent-louver adjustment requires
