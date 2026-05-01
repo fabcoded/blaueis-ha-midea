@@ -38,7 +38,7 @@ visible no-op that makes the user think. **You paste, you own it.**
 
 | Product line | Fingerprints characterised | Observed on |
 |---|---|---|
-| [Midea XtremeSaveBlue](xtremesaveblue.md) | cap `0x16=0`, SN8 empty, 8-bit B1 keyspace | one unit labelled Q11, 2026-04 |
+| [Midea XtremeSaveBlue](xtremesaveblue.md) | cap `0x16=0`, SN8 empty, 8-bit B1 keyspace | one XtremeSaveBlue-labelled unit, 2026-04 |
 
 ## Adding a device
 

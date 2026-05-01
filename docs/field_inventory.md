@@ -94,7 +94,7 @@ The second scan's markdown carries the diff section.
 For each field classified `populated` that HA would hide by default
 (cap-gated to `never` on this firmware), the report emits a YAML
 snippet ready to paste into *Configure → Advanced — Glossary
-overrides (YAML)*. Example from the Q11:
+overrides (YAML)*. Example from a probed XtremeSaveBlue (cap 0x16=0) unit:
 
 ````markdown
 ### `power_total_kwh`

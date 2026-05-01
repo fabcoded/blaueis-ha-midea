@@ -48,13 +48,13 @@ import pytest  # noqa: E402
 from homeassistant.const import CONF_HOST, CONF_PORT  # noqa: E402
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
 
-# Canonical Q11 C1 Group 4 frame — 721.57 kWh lifetime / 0.191 kW realtime.
+# Canonical C1 Group 4 frame from a probed XtremeSaveBlue (cap 0x16=0) — 721.57 kWh lifetime / 0.191 kW realtime.
 SESSION_15_C1G4_BODY = bytes.fromhex(
     "c1210144000119dd00000000000000000007760000"
 )
 
-# Synthetic B5 cap record: cap 0x16=0 (Q11 reports "no power calc").
-Q11_CAP_0x16_0 = [
+# Synthetic B5 cap record: cap 0x16=0 ("no power calc" — the discriminator we key on).
+CAP_0x16_0_RECORDS = [
     {
         "cap_id": "0x16",
         "cap_type": 2,
@@ -119,7 +119,7 @@ def mock_gateway_device():
     device = MagicMock()
     device._frame_observers = []
     device._glossary = None  # tests populate from load_glossary if needed
-    device._status = {"capabilities_raw": list(Q11_CAP_0x16_0)}
+    device._status = {"capabilities_raw": list(CAP_0x16_0_RECORDS)}
 
     def register_observer(cb):
         if cb not in device._frame_observers:

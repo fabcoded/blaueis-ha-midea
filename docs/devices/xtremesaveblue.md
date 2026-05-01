@@ -44,11 +44,11 @@ matches.
 
 ### Observed on
 
-We've confirmed this fingerprint on one physical unit whose spec plate
-says **Midea XtremeSaveBlue, model code Q11**. We have not probed Q14,
-Q1B, or other XtremeSaveBlue model codes ourselves — they may match
-this fingerprint, partially overlap, or differ entirely. If you probe
-one, please open an issue with your cap map.
+We've confirmed this fingerprint on one physical XtremeSaveBlue-labelled
+unit. Other XtremeSaveBlue units (different firmware revisions, different
+regional SKUs) may match this fingerprint, partially overlap, or differ
+entirely — we don't have evidence either way. If you probe one, please
+open an issue with your cap map.
 
 ---
 
@@ -141,5 +141,6 @@ firmware. Re-probe and compare against the fingerprint above.
 
 - **2026-04-23** — Initial doc. Fingerprint characterisation from
   Session 15 probe (2026-04-10) + 48 h live observation post-deploy.
-  Verified cap `0x16 = 0` on one physical unit labelled XtremeSaveBlue
-  Q11; other model codes in the line not yet probed.
+  Verified cap `0x16 = 0` on one physical XtremeSaveBlue-labelled unit;
+  other firmware revisions / regional SKUs in the same product line not
+  yet probed.
