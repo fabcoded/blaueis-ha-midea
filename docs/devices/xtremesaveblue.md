@@ -133,7 +133,7 @@ firmware. Re-probe and compare against the fingerprint above.
 
 - Protocol-level quirks for CLI workflows (`ac_monitor.py --quirks …`,
   `build_command.py --quirks …`):
-  `blaueis-libmidea/packages/blaueis-core/src/blaueis/core/data/device_quirks/xtremesaveblue_q11_power.yaml`
+  `blaueis-libmidea/packages/blaueis-core/src/blaueis/core/data/device_quirks/xtremesaveblue_power_quirk.yaml`
 - Linear-encoding formulas: see `encodings:` → `power_linear_4` and
   `power_linear_3` in the glossary.
 - How the override mechanism works:
