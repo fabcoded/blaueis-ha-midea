@@ -13,9 +13,10 @@ to fix this.
 ```
 
 Long-term-stats compilation for the entity is **paused** until you
-resolve the issue from the Repairs panel. Short-term state history
-(the last 10 days of raw values) keeps recording — only the rolled-up
-hourly/5-minute aggregates pause.
+resolve the issue from **Developer Tools → Statistics** (NOT the
+Repairs panel — see "Where to find the Fix" below). Short-term state
+history (the last 10 days of raw values) keeps recording — only the
+rolled-up hourly/5-minute aggregates pause.
 
 This is benign in itself, but if you don't act on it the entity
 disappears from the Energy dashboard, the History/Statistics graphs,
@@ -46,7 +47,28 @@ The recorder then checks whether the old↔new units have a registered
 
 `source/components/sensor/recorder.py:710-738` is the dispatch.
 
-## What the "Fix" wizard offers
+## Where to find the Fix
+
+**Developer Tools → Statistics tab**, NOT the Repairs panel.
+
+The recorder creates an issue-registry entry with **`is_fixable=False`**
+(`recorder.py:783`), which means the Repairs panel surfaces it as an
+*informational notification* with **no FIX button**. The actual
+remediation lives at:
+
+```
+Settings sidebar → 🔧 Developer Tools → Statistics tab
+http://<ha-host>:8123/developer-tools/statistics
+```
+
+In that table, entities with active `units_changed` issues display a
+**⚠️ yellow warning triangle** in the leftmost column. Click the row
+→ dialog opens with the Fix buttons.
+
+The warning's `Go to https://my.home-assistant.io/redirect/developer_statistics`
+URL points here.
+
+## What the "Fix" dialog offers
 
 The Repairs entry surfaces a wizard with **two or three** buttons,
 each mapped to a recorder WebSocket command
