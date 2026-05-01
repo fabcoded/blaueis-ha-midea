@@ -55,18 +55,14 @@ class GlossaryOverrideError(ValueError):
     """
 
 
-# ── Schema loader (cached) ─────────────────────────────────────────────
+# ── Schema (loaded at module init) ─────────────────────────────────────
+# Loaded eagerly so the I/O happens during HA's executor-threaded import
+# of the integration package — never inside the event loop. A lazy load
+# triggered HA's blocking-call detector at async_setup_entry time.
+# The schema file is bundled with the integration and never mutates, so
+# there's no benefit to deferring.
 
-
-_schema_cache: dict | None = None
-
-
-def _load_schema() -> dict:
-    global _schema_cache
-    if _schema_cache is None:
-        with open(_SCHEMA_PATH, encoding="utf-8") as f:
-            _schema_cache = json.load(f)
-    return _schema_cache
+_SCHEMA: dict = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 # ── Public API ─────────────────────────────────────────────────────────
@@ -127,7 +123,7 @@ def validate_and_parse_overrides(
     base = load_glossary()
     merged, affected, warnings = apply_override(base, parsed)
 
-    schema = _load_schema()
+    schema = _SCHEMA
     validator = Draft202012Validator(schema)
     base_signatures = {_error_signature(e) for e in validator.iter_errors(base)}
     new_errors = [
