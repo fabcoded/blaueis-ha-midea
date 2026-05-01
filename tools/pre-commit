@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+# pre-commit hook for blaueis-ha-midea
+#
+# Enforces the no-drift contract for the vendored libmidea copy:
+#
+# 1. If lib/blaueis/{core,client} are symlinks (dev-link active),
+#    the commit is refused. Run `tools/dev_link_libmidea.py --unlink`
+#    to restore flat-file copies before committing.
+#
+# 2. Otherwise the sync script runs in --check mode. Any drift between
+#    the vendored copy and libmidea HEAD aborts the commit. Run
+#    `tools/sync_from_libmidea.py` (no flag) to fix, then re-commit.
+#
+# Install once: copy or symlink this file into .git/hooks/pre-commit
+# and chmod +x. (Repo-tracked at tools/pre-commit so it's committable.)
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+LIB="$REPO_ROOT/custom_components/blaueis_midea/lib/blaueis"
+
+# Reject if any of the vendored subdirs is a symlink
+for sub in core client; do
+    if [ -L "$LIB/$sub" ]; then
+        echo "pre-commit: $LIB/$sub is a symlink (dev-link active)." >&2
+        echo "Run 'python3 tools/dev_link_libmidea.py --unlink' to restore" >&2
+        echo "flat-file copies before committing." >&2
+        exit 1
+    fi
+done
+
+# Drift check
+if ! python3 "$REPO_ROOT/tools/sync_from_libmidea.py" --check; then
+    echo "" >&2
+    echo "pre-commit: vendored lib/ has drifted from libmidea." >&2
+    echo "Run 'python3 tools/sync_from_libmidea.py' (no flag) to fix," >&2
+    echo "then re-stage and re-commit." >&2
+    exit 1
+fi
+
+exit 0
