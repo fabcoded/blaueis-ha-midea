@@ -70,12 +70,7 @@ class BlaueisMideaSwitch(SwitchEntity):
         self._attr_name = (
             gdef.get("label") or self._field_name.replace("_", " ").title()
         )
-        # Registry-disabled default has two equivalent triggers: the new
-        # unified-vocabulary `feature_available: *-opt` (preferred) and the
-        # legacy `ha.enabled_default: false` (kept for backward compatibility
-        # until all fields finish migrating).
-        fa = gdef.get("feature_available", "")
-        if fa.endswith("-opt") or ha_meta.get("enabled_default") is False:
+        if gdef.get("feature_available", "").endswith("-opt"):
             self._attr_entity_registry_enabled_default = False
 
     async def async_added_to_hass(self) -> None:

@@ -113,12 +113,7 @@ class BlaueisMideaSensor(SensorEntity):
         if "entity_category" in ha_meta:
             from homeassistant.helpers.entity import EntityCategory
             self._attr_entity_category = EntityCategory(ha_meta["entity_category"])
-        # Registry-disabled default has two equivalent triggers: the new
-        # unified-vocabulary `feature_available: *-opt` (preferred) and the
-        # legacy `ha.enabled_default: false` (kept for backward compatibility
-        # until all fields finish migrating).
-        fa = gdef.get("feature_available", "")
-        if fa.endswith("-opt") or ha_meta.get("enabled_default") is False:
+        if gdef.get("feature_available", "").endswith("-opt"):
             self._attr_entity_registry_enabled_default = False
 
         off_behavior = ha_meta.get("off_behavior", "hide")

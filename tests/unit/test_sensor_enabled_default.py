@@ -1,11 +1,8 @@
 """Unit tests — registry-disabled-default behavior across all 4 entity platforms.
 
-Two equivalent triggers must set ``_attr_entity_registry_enabled_default = False``:
-1. New unified vocabulary: ``feature_available`` ending in ``-opt``
-2. Legacy ``ha.enabled_default: false`` (kept for back-compat during migration)
-
-Both paths active simultaneously; either one triggers the disabled-default
-state. Parity is verified for sensor / binary_sensor / select / switch.
+A field's ``feature_available`` ending in ``-opt`` flips
+``_attr_entity_registry_enabled_default`` to False. Verified for sensor /
+binary_sensor / select / switch — every glossary-auto-mapped platform.
 """
 
 from __future__ import annotations
@@ -77,35 +74,3 @@ def test_feature_available_drives_registry_disabled(platform, feature_available,
     else:
         # Default is True; only the disabled case explicitly sets False
         assert actual is not False
-
-
-@pytest.mark.parametrize("platform", list(PLATFORM_FACTORIES.keys()))
-def test_legacy_ha_enabled_default_false_still_works(platform):
-    """ha.enabled_default: false legacy path remains active during migration —
-    on every platform."""
-    factory = PLATFORM_FACTORIES[platform]
-    e = factory({
-        "feature_available": "readable",
-        "ha": {"enabled_default": False},
-    })
-    assert e._attr_entity_registry_enabled_default is False
-
-
-@pytest.mark.parametrize("platform", list(PLATFORM_FACTORIES.keys()))
-def test_new_and_legacy_both_set(platform):
-    """Setting both triggers is idempotent — disabled-by-default."""
-    factory = PLATFORM_FACTORIES[platform]
-    e = factory({
-        "feature_available": "readable-opt",
-        "ha": {"enabled_default": False},
-    })
-    assert e._attr_entity_registry_enabled_default is False
-
-
-@pytest.mark.parametrize("platform", list(PLATFORM_FACTORIES.keys()))
-def test_neither_trigger_set_means_default_enabled(platform):
-    """No '-opt' suffix and no ha.enabled_default: false → entity enabled by default."""
-    factory = PLATFORM_FACTORIES[platform]
-    e = factory({"feature_available": "readable"})
-    actual = getattr(e, "_attr_entity_registry_enabled_default", True)
-    assert actual is not False
