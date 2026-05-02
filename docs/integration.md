@@ -25,45 +25,49 @@ the same install, without forcing either to compromise:
    the tooling to capture and interpret what the wire is carrying.
 
 The reconciliation between these audiences is **structural, not
-editorial**. Three independent axes in the glossary, applied in
+editorial**. Two independent axes in the glossary, applied in
 combination, produce a per-field disposition that lands the field on
 the right surface for the right user:
 
-### The three axes
+### The two axes
 
 | Axis | Glossary key | Decides |
 |---|---|---|
-| **Existence** | `feature_available` | Whether the entity is registered in HA at all |
-| **Default-active** | `ha.enabled_default` | Whether the entity is on by default once registered |
+| **Existence + default-active** | `feature_available` | Whether the entity is registered, *and* whether it is enabled by default once registered |
 | **Visual placement** | `ha.entity_category` | Where the entity renders on the device card |
 
 These are **independent and combine** — they are not alternatives.
-A field can carry zero, one, two, or all three.
+A field can carry zero, one, or both flags.
 
 #### Axis 1: `feature_available` (the integration's gate)
 
-| Value | Effect |
-|---|---|
-| `never` | Not registered. No HA entity, no state, no row in registry. The field lives in the glossary as documentation; see `disabled_fields.md` (in `blaueis-libmidea`) for the contribution path to promote each. |
-| `capability` | Registered only if the device's B5 capability scan confirms support on this hardware. Cap-discovery does the gating; no manual override needed. |
-| `readable` | Always registered (no cap dependency). |
-| `always` | Always registered + writable from the start. |
+The vocabulary unifies registration with default-enabled state. The
+six-value enum encodes both decisions in one key — the `-opt` suffix
+on the cap-confirmed and always-readable tiers means "register, but
+disabled by default; user opts in via the entity registry."
 
-#### Axis 2: `ha.enabled_default` (HA registry level)
+| Value | Registered? | Enabled by default? | Effect |
+|---|---|---|---|
+| `never` | No | n/a | Not registered. No HA entity, no state, no row in registry. The field lives in the glossary as documentation; see `disabled_fields.md` (in `blaueis-libmidea`) for the contribution path to promote each. |
+| `capability` | Iff B5 cap confirms | Yes | Registered only if the device's B5 capability scan confirms support on this hardware. Once confirmed, fully active. |
+| `capability-opt` | Iff B5 cap confirms | **No** | Registered only if cap-confirmed, then registered-but-disabled. Use when the cap is reported but historically misbehaves on the hardware variant ("ignored cap"); user opts in if their unit happens to be one of the working ones. |
+| `readable` | Yes | Yes | Always registered (no cap dependency), enabled. |
+| `readable-opt` | Yes | **No** | Always registered, **disabled by default**. User flips on via Settings → Devices → Entities. Use for diagnostic readouts that are noisy, irrelevant on most SKUs, or only useful to investigators. |
+| `always` | Yes | Yes | Always registered + writable from the start. |
 
-When `false`, HA stores `disabled_by="integration"` on the entity
-registry row. The entity is registered but **HA does not collect its
-state** — no poll, no history, no statistics, doesn't show on any
-card or in any list of "current entities." It appears in the entity
-registry's *disabled* list, where the user can flip it on. Once
-enabled, the flag clears and the entity behaves normally.
+When the value ends in `-opt`, HA stores `disabled_by="integration"`
+on the entity registry row. The entity is registered but **HA does
+not collect its state** — no poll, no history, no statistics, doesn't
+show on any card or in any list of "current entities." It appears in
+the entity registry's *disabled* list, where the user can flip it on.
+Once enabled, the flag clears and the entity behaves normally.
 
-Think of this as **"hidden behind a door the user can open"** —
-applied when the field's *value* may be irrelevant on a given hardware
-variant (humidity sensor not present), confusing (raw bytes), or
-noisy in history graphs.
+Think of `-opt` as **"hidden behind a door the user can open"** —
+applied when the field's *value* may be irrelevant on a given
+hardware variant (humidity sensor not present), confusing (raw
+bytes), or noisy in history graphs.
 
-#### Axis 3: `ha.entity_category: diagnostic` (HA presentation level)
+#### Axis 2: `ha.entity_category: diagnostic` (HA presentation level)
 
 The entity is fully alive — state collected, history recorded,
 automations work, statistics compile. It just renders under a
@@ -78,50 +82,55 @@ feeling" user expand the Diagnostic section.
 
 ### How the axes combine
 
-| feature_available | enabled_default | entity_category | What the user sees |
-|---|---|---|---|
-| `readable` / `always` | (default true) | (none) | **Primary** — top-level on device card, fully active |
-| `readable` / `always` | true | `diagnostic` | **Diagnostic shelf** — under Diagnostic subsection, fully active |
-| `readable` / `always` | **false** | (none) | **Hidden** — opt-in via registry. Once opt-in: Primary |
-| `readable` / `always` | **false** | `diagnostic` | **Hidden** — opt-in via registry. Once opt-in: Diagnostic shelf |
-| `capability` | (any) | (any) | If B5 confirms: behaves per the row above. If not: not registered |
-| `never` | n/a | n/a | **Doesn't exist** — glossary documentation only |
+| feature_available | entity_category | What the user sees |
+|---|---|---|
+| `readable` / `always` | (none) | **Primary** — top-level on device card, fully active |
+| `readable` / `always` | `diagnostic` | **Diagnostic shelf** — under Diagnostic subsection, fully active |
+| `readable-opt` | (none) | **Hidden** — opt-in via registry. Once opt-in: Primary |
+| `readable-opt` | `diagnostic` | **Hidden** — opt-in via registry. Once opt-in: Diagnostic shelf |
+| `capability` / `capability-opt` | (any) | If B5 confirms: behaves per the same row but with the `-opt` enabled / not-enabled distinction. If not confirmed: not registered |
+| `never` | n/a | **Doesn't exist** — glossary documentation only |
 
 ### Worked examples
 
 - `target_temperature`, `power`, `operating_mode` — Axis 1 `always`,
-  no flags on Axes 2 or 3 → **Primary**. Folded into the climate
-  entity; the user controls them directly.
-- `outdoor_temperature` — Axis 1 `readable`, no Axis 2/3 flags →
+  no Axis 2 flag → **Primary**. Folded into the climate entity;
+  the user controls them directly.
+- `outdoor_temperature` — Axis 1 `readable`, no Axis 2 flag →
   **Primary** standalone sensor. Useful for weather correlations and
   visible by default.
 - `compressor_frequency`, `t4_outdoor_ambient_temp` — Axis 1
-  `readable`, Axis 3 `diagnostic` → **Diagnostic shelf**. Modulation
+  `readable`, Axis 2 `diagnostic` → **Diagnostic shelf**. Modulation
   visibility and raw thermistor reading; useful but not what a
   typical user looks at on the front of a device card.
 - `humidity_actual` (when uncertain whether the hardware has a
-  sensor) — Axis 1 `readable`, Axis 2 `false` → **Hidden**. User on a
-  premium SKU enables it; user on a basic SKU never sees a
-  no-data-here ghost entity.
+  sensor) — Axis 1 `readable-opt` → **Hidden**. User on a premium
+  SKU enables it; user on a basic SKU never sees a no-data-here
+  ghost entity.
+- `compressor_running` — Axis 1 `readable-opt` → **Hidden**. The
+  bit misbehaves on at least one hardware variant
+  (XtremeSaveBlue cap-0x16=0 reads body[6]=0 always); leaving it
+  disabled-by-default avoids reporting a wrong value on those units.
 - `vane_*_angle` (per memory: dead sensors) — Axis 1 `never` →
   **Doesn't exist**. Promoting back requires evidence per
   `disabled_fields.md`.
 
 ### What this is NOT
 
-- **Not a permissions model.** All three axes are user-overridable in
-  the standard HA UI: the user can enable any disabled-by-default
-  entity, expand any Diagnostic shelf, and remove any
-  `enabled_default: false` constraint via Settings → Devices →
+- **Not a permissions model.** Both axes are user-overridable in
+  the standard HA UI: the user can enable any `*-opt`-disabled
+  entity and expand any Diagnostic shelf via Settings → Devices →
   Entities. The integration's defaults express *expectations*, not
-  hard locks.
+  hard locks. For `feature_available: never`, the path is the
+  Glossary-Overrides textarea (see `glossary_overrides.md`) — pin
+  the field to `readable-opt` or `readable` per device.
 - **Not editorial curation.** No "we don't want users to see this"
   decisions. A field is hidden because either (a) its data is not
   reliable on the available evidence (`feature_available: never`,
   see `disabled_fields.md`), (b) its hardware presence varies across
-  SKUs (`enabled_default: false`), or (c) its information density is
-  too high for the front of a device card
-  (`entity_category: diagnostic`). All three conditions are
+  SKUs (`feature_available: readable-opt` or `capability-opt`), or
+  (c) its information density is too high for the front of a device
+  card (`entity_category: diagnostic`). All three conditions are
   documentable; none are taste.
 
 ### Tinkerer surfaces

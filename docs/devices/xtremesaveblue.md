@@ -32,7 +32,7 @@ And these behavioural signatures that surface in day-to-day decode:
   inverts the bit (matching the more common idle/running interpretation
   on units where the bit actually tracks compressor state), so on this
   firmware the field would surface as `compressor_running=true` 24/7
-  if enabled. Glossary defaults the field to `enabled_default: false`;
+  if enabled. Glossary defaults the field to `feature_available: readable-opt`;
   this profile leaves it disabled. (An alternative community-research
   interpretation labels the byte as "compressor current," which the
   live data does not support — see the glossary note for details.)
