@@ -121,6 +121,22 @@ class BlaueisMideaSensor(SensorEntity):
             off_behavior = "hide"
         self._off_behavior = off_behavior
 
+        # Build raw → human-readable string map from the glossary's `values:`
+        # block, when present. Used by `native_value` to render enum-typed
+        # sensors as text instead of the bare wire byte. Prefer `label`
+        # (cap-style convention) over `description` (field-style); fall back
+        # to the YAML key. Empty map means "no enum, return raw value as-is".
+        self._value_lookup: dict[int, str] = {}
+        for _vkey, vdef in (gdef.get("values") or {}).items():
+            if not isinstance(vdef, dict):
+                continue
+            raw = vdef.get("raw")
+            if not isinstance(raw, int) or isinstance(raw, bool):
+                continue
+            self._value_lookup[raw] = (
+                vdef.get("label") or vdef.get("description") or _vkey
+            )
+
         # Legacy hardcoded fallback — kicks in per-attribute when the glossary's
         # `ha:` block doesn't declare it. Delete once all measurement sensors
         # have their device_class / unit migrated into the glossary.
@@ -162,6 +178,8 @@ class BlaueisMideaSensor(SensorEntity):
         value = self._coord.device.read(self._field_name)
         if self._off_behavior == "hide" and not self._coord.device.read("power"):
             return None
+        if self._value_lookup and isinstance(value, int) and not isinstance(value, bool):
+            return self._value_lookup.get(value, f"Unknown ({value})")
         return value
 
 
