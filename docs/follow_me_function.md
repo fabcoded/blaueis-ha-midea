@@ -296,7 +296,7 @@ AC > ... > Download Diagnostics**), look for:
 ## 7. Protocol reference
 
 For the full R/T bus analysis including frame captures and timing, see
-`HVAC-shark/protocols/midea/analysis/analysis_follow_me_serial.md`.
+`blaueis-hvacshark/protocols/midea/analysis/analysis_follow_me_serial.md`.
 
 ### Frame format (cmd_0x41 Follow Me query)
 

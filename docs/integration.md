@@ -372,7 +372,7 @@ back and interrupts every other integration.
 | Understand WS messages | `../blaueis-libmidea/docs/ws_protocol.md` |
 | Tune the gateway or debug a gateway crash | `../blaueis-libmidea/docs/operations.md` |
 | Understand the flight recorder schema | `../blaueis-libmidea/docs/flight_recorder.md` |
-| Know what `frame_spacing_ms=150` means | `../../HVAC-shark-dumps/data-analysis/midea/uart/timing-analysis.md` |
+| Know what `frame_spacing_ms=150` means | `../../blaueis-hvacshark-traces/data-analysis/midea/uart/timing-analysis.md` |
 | Extend the integration (new entity type, new glossary field) | `custom_components/blaueis_midea/` + `../blaueis-libmidea/docs/architecture.md` §4 |
 | See which glossary fields my AC actually populates | [field_inventory.md](field_inventory.md) — button / service / CLI |
 | Find a copy-paste override for a hidden-but-populated field | [field_inventory.md](field_inventory.md) §"Suggested override snippets" |

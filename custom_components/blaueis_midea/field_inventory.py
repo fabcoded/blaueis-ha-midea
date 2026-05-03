@@ -96,7 +96,7 @@ SERVICE_SCHEMA = vol.Schema(
 _SCAN_COLLECTION_SECONDS = 10.0
 
 # Per-query sleep between injected sends — respects the frame-spacing
-# safety floor documented in the HVAC-shark timing analysis.
+# safety floor documented in the blaueis-hvacshark timing analysis.
 _INJECT_SPACING_SECONDS = 0.20
 
 # ── Store config ───────────────────────────────────────────────────────
