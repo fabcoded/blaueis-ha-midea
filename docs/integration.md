@@ -307,10 +307,17 @@ Two flavours, pick by what you changed.
 | Changed | Action | HA downtime |
 |---|---|---|
 | HA **UI config** (host / port / PSK) | Settings → ⋮ → Reload | ~1 s, only this integration |
-| `const.py`, glossary YAML (declarative data) | Reload config entry | ~1 s |
+| Glossary overrides (Configure dialog YAML) | Reload config entry | ~1 s |
 | Any `.py` file in `custom_components/blaueis_midea/**` | `ha core restart` | 30–60 s, whole HA |
 | Any `.py` in vendored `lib/blaueis/**` | `ha core restart` | Same |
+| Bundled `glossary.yaml` (libmidea data) | `ha core restart` | Same |
 | New platform added (e.g. adding `number.py`) | `ha core restart` | Same |
+
+> The bundled glossary is parsed once per process and cached in
+> `blaueis.core.codec._glossary_cache` — there is no live-reload path
+> for it. Glossary *overrides* (the YAML pasted into the Configure
+> dialog, persisted in the config entry's options) are re-read on
+> entry reload and don't need a restart.
 
 A long-lived HA access token (keep it in a local, gitignored file — or
 export via `HA_TOKEN` in your shell) lets you drive runtime operations
@@ -328,10 +335,11 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   -d "{\"entry_id\": \"$ENTRY_ID\"}"
 ```
 
-**Rule of thumb:** Python file changes need `ha core restart`. Anything
-else (config, YAML, state, service calls) is token-driven via the REST
-API. Avoiding unnecessary restarts matters — HA takes 30–60s to come
-back and interrupts every other integration.
+**Rule of thumb:** Python file changes and bundled-glossary edits need
+`ha core restart`. Config-entry options (host/port/PSK, glossary
+overrides) and runtime state / service calls are token-driven via the
+REST API. Avoiding unnecessary restarts matters — HA takes 30–60s to
+come back and interrupts every other integration.
 
 ---
 

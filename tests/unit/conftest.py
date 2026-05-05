@@ -36,7 +36,28 @@ for _mod in _HA_MODULES:
 class _HomeAssistantError(Exception):
     pass
 
+
+class _ServiceValidationError(_HomeAssistantError):
+    """Mirror of HA's ServiceValidationError — accepts the
+    translation_domain/translation_key/translation_placeholders kwargs
+    the production code uses, and stashes them as attributes so tests
+    can assert on them."""
+
+    def __init__(
+        self,
+        *args,
+        translation_domain=None,
+        translation_key=None,
+        translation_placeholders=None,
+    ) -> None:
+        super().__init__(*args)
+        self.translation_domain = translation_domain
+        self.translation_key = translation_key
+        self.translation_placeholders = translation_placeholders or {}
+
+
 sys.modules["homeassistant.exceptions"].HomeAssistantError = _HomeAssistantError
+sys.modules["homeassistant.exceptions"].ServiceValidationError = _ServiceValidationError
 
 
 # Entity base classes must be real `object` subclasses so @property decorators

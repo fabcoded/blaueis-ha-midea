@@ -26,8 +26,10 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._i18n import glossary_label_for_lang
+from ._preflight import validate_or_raise
 from ._set_result import check_set_result
-from ._ux_mixin import field_ux_available
+from ._ux_mixin import field_ux_available, field_writable_in_current_mode
 from .const import (
     CONF_DISPLAY_BUZZER_MODE,
     DISPLAY_BUZZER_MODE_DEFAULT,
@@ -69,9 +71,7 @@ async def async_setup_entry(
     # to `switch.screen_display` by the generic platform dispatch, so on
     # an unsupported device the whole feature-surface disappears together.
     if _screen_display_cap_advertised(coordinator):
-        entities.append(
-            BlaueisMideaDisplayBuzzerModeSelect(hass, entry, coordinator)
-        )
+        entities.append(BlaueisMideaDisplayBuzzerModeSelect(hass, entry, coordinator))
 
     async_add_entities(entities)
 
@@ -89,7 +89,11 @@ class BlaueisMideaSelect(SelectEntity):
             f"{coordinator.host}_{coordinator.port}_{self._field_name}"
         )
         gdef = coordinator.device.field_gdef(self._field_name) or {}
-        self._attr_name = gdef.get("label") or self._field_name.replace("_", " ").title()
+        self._attr_name = glossary_label_for_lang(
+            gdef,
+            self._field_name,
+            getattr(coordinator.hass.config, "language", None),
+        )
 
         ha_meta = gdef.get("ha") or {}
         if gdef.get("feature_available", "").endswith("-opt"):
@@ -157,6 +161,8 @@ class BlaueisMideaSelect(SelectEntity):
     def available(self) -> bool:
         if not field_ux_available(self._coord, self._field_name):
             return False
+        if not field_writable_in_current_mode(self._coord, self._field_name):
+            return False
         power = self._coord.device.read("power")
         return bool(power)
 
@@ -199,6 +205,7 @@ class BlaueisMideaSelect(SelectEntity):
                 value = int(option)
             except ValueError:
                 value = option
+        validate_or_raise(self._coord, self._field_name, value)
         result = await self._coord.device.set(**{self._field_name: value})
         check_set_result(result, primary_fields={self._field_name})
 
@@ -405,9 +412,7 @@ class BlaueisMideaDisplayBuzzerModeSelect(SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         if option not in DISPLAY_BUZZER_OPTIONS:
-            raise HomeAssistantError(
-                f"Unknown display/buzzer option: {option!r}"
-            )
+            raise HomeAssistantError(f"Unknown display/buzzer option: {option!r}")
 
         # Resolve entity-option → stored policy. Only forced_* options
         # persist a non-default policy; on/off always resolve to
@@ -435,7 +440,8 @@ class BlaueisMideaDisplayBuzzerModeSelect(SelectEntity):
         # semantics decoupled from the cooldown-based enforcement loop.
         if option in (DISPLAY_BUZZER_OPTION_ON, DISPLAY_BUZZER_OPTION_OFF):
             target = (
-                DISPLAY_STATE_ON if option == DISPLAY_BUZZER_OPTION_ON
+                DISPLAY_STATE_ON
+                if option == DISPLAY_BUZZER_OPTION_ON
                 else DISPLAY_STATE_OFF
             )
             observed = _read_observed_display_bits(self._coord)
@@ -443,9 +449,7 @@ class BlaueisMideaDisplayBuzzerModeSelect(SelectEntity):
                 try:
                     await self._coord.device.toggle_display()
                 except Exception:
-                    _LOGGER.exception(
-                        "display toggle failed (non-enforced %s)", option
-                    )
+                    _LOGGER.exception("display toggle failed (non-enforced %s)", option)
 
         self.async_write_ha_state()
 

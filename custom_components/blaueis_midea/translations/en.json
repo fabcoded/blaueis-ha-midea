@@ -75,5 +75,16 @@
         }
       }
     }
+  },
+  "exceptions": {
+    "value_out_of_range": {
+      "message": "{got} is outside the allowed range [{min}, {max}] for {field}."
+    },
+    "value_not_in_enum": {
+      "message": "{got} is not one of the allowed values for {field} (allowed: {allowed})."
+    },
+    "field_inactive_in_mode": {
+      "message": "{field} cannot be set while operating mode is {mode}."
+    }
   }
 }

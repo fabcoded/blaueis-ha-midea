@@ -13,6 +13,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._i18n import glossary_label_for_lang
 from ._ux_mixin import field_ux_available
 from .coordinator import BlaueisMideaCoordinator
 
@@ -126,8 +127,10 @@ class BlaueisMideaSensor(SensorEntity):
         # as glossary entries gain their declarative metadata.
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         ha_meta = gdef.get("ha") or {}
-        self._attr_name = (
-            gdef.get("label") or self._field_name.replace("_", " ").title()
+        self._attr_name = glossary_label_for_lang(
+            gdef,
+            self._field_name,
+            getattr(coordinator.hass.config, "language", None),
         )
         if "device_class" in ha_meta:
             self._attr_device_class = ha_meta["device_class"]

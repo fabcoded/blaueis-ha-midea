@@ -12,8 +12,10 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._i18n import glossary_label_for_lang
+from ._preflight import validate_or_raise
 from ._set_result import check_set_result
-from ._ux_mixin import field_ux_available
+from ._ux_mixin import field_ux_available, field_writable_in_current_mode
 from .const import (
     CONF_FMF_CONFIGURED,
     CONF_FMF_ENABLED,
@@ -66,9 +68,10 @@ class BlaueisMideaSwitch(SwitchEntity):
 
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         ha_meta = gdef.get("ha") or {}
-        # Label from glossary (preferred) or mechanical title-case fallback.
-        self._attr_name = (
-            gdef.get("label") or self._field_name.replace("_", " ").title()
+        self._attr_name = glossary_label_for_lang(
+            gdef,
+            self._field_name,
+            getattr(coordinator.hass.config, "language", None),
         )
         if gdef.get("feature_available", "").endswith("-opt"):
             self._attr_entity_registry_enabled_default = False
@@ -97,6 +100,8 @@ class BlaueisMideaSwitch(SwitchEntity):
     def available(self) -> bool:
         if not field_ux_available(self._coord, self._field_name):
             return False
+        if not field_writable_in_current_mode(self._coord, self._field_name):
+            return False
         power = self._coord.device.read("power")
         return bool(power)
 
@@ -105,10 +110,12 @@ class BlaueisMideaSwitch(SwitchEntity):
         return self._coord.device.read(self._field_name)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        validate_or_raise(self._coord, self._field_name, True)
         result = await self._coord.device.set(**{self._field_name: True})
         check_set_result(result, primary_fields={self._field_name})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        validate_or_raise(self._coord, self._field_name, False)
         result = await self._coord.device.set(**{self._field_name: False})
         check_set_result(result, primary_fields={self._field_name})
 
@@ -156,27 +163,20 @@ class BlauiesFollowMeSwitch(SwitchEntity):
         # this our purge → re-add cycle would silently keep the switch
         # hidden on the device card.
         from homeassistant.helpers import entity_registry as er
+
         reg = er.async_get(self.hass)
         cur = reg.async_get(self.entity_id)
         if cur is not None and cur.hidden_by is not None:
             reg.async_update_entity(self.entity_id, hidden_by=None)
-        self._coord.register_entity_callback(
-            "follow_me", self.async_write_ha_state
-        )
-        self._coord.register_entity_callback(
-            "power", self.async_write_ha_state
-        )
+        self._coord.register_entity_callback("follow_me", self.async_write_ha_state)
+        self._coord.register_entity_callback("power", self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self) -> None:
         fm = self._coord.blaueis_follow_me
         if fm.active or fm._stopping:
             await fm.async_stop()
-        self._coord.unregister_entity_callback(
-            "follow_me", self.async_write_ha_state
-        )
-        self._coord.unregister_entity_callback(
-            "power", self.async_write_ha_state
-        )
+        self._coord.unregister_entity_callback("follow_me", self.async_write_ha_state)
+        self._coord.unregister_entity_callback("power", self.async_write_ha_state)
 
     @property
     def device_info(self) -> DeviceInfo:

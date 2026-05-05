@@ -8,6 +8,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._i18n import glossary_label_for_lang
 from ._ux_mixin import field_ux_available
 from .coordinator import BlaueisMideaCoordinator
 
@@ -40,15 +41,22 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
 
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         ha_meta = gdef.get("ha") or {}
-        # Label from glossary (preferred) or mechanical title-case fallback.
-        self._attr_name = (
-            gdef.get("label") or self._field_name.replace("_", " ").title()
+        # Label resolution: per-field i18n (glossary `label_i18n[lang]`)
+        # → English in i18n → top-level `label:` → mechanical title-case.
+        # Snapshotted at construction; HA does not refresh entity names
+        # on language change without an entity reload.
+        self._attr_name = glossary_label_for_lang(
+            gdef,
+            self._field_name,
+            getattr(coordinator.hass.config, "language", None),
         )
         if "device_class" in ha_meta:
             from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+
             self._attr_device_class = BinarySensorDeviceClass(ha_meta["device_class"])
         if "entity_category" in ha_meta:
             from homeassistant.helpers.entity import EntityCategory
+
             self._attr_entity_category = EntityCategory(ha_meta["entity_category"])
         if gdef.get("feature_available", "").endswith("-opt"):
             self._attr_entity_registry_enabled_default = False

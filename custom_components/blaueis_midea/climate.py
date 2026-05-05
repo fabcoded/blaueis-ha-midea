@@ -21,6 +21,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._preflight import validate_or_raise
 from ._set_result import check_set_result
 from .const import (
     CLIMATE_PRESET_FIELDS,
@@ -156,13 +157,15 @@ class BlaueisMideaClimate(ClimateEntity):
                 if ha_mode:
                     modes.append(HVACMode(ha_mode))
         else:
-            modes.extend([
-                HVACMode.AUTO,
-                HVACMode.COOL,
-                HVACMode.HEAT,
-                HVACMode.DRY,
-                HVACMode.FAN_ONLY,
-            ])
+            modes.extend(
+                [
+                    HVACMode.AUTO,
+                    HVACMode.COOL,
+                    HVACMode.HEAT,
+                    HVACMode.DRY,
+                    HVACMode.FAN_ONLY,
+                ]
+            )
 
         return modes
 
@@ -248,12 +251,14 @@ class BlaueisMideaClimate(ClimateEntity):
         else:
             midea_mode = MODE_HA_TO_MIDEA.get(hvac_mode.value)
             if midea_mode is not None:
+                validate_or_raise(self._coord, "operating_mode", midea_mode)
                 result = await self._device.set(power=True, operating_mode=midea_mode)
                 check_set_result(result, primary_fields={"power", "operating_mode"})
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is not None:
+            validate_or_raise(self._coord, "target_temperature", temp)
             result = await self._device.set(target_temperature=temp)
             check_set_result(result, primary_fields={"target_temperature"})
 
@@ -262,6 +267,7 @@ class BlaueisMideaClimate(ClimateEntity):
             fan_mode = "Auto"
         speed = self._fan_name_to_raw.get(fan_mode)
         if speed is not None:
+            validate_or_raise(self._coord, "fan_speed", speed)
             result = await self._device.set(fan_speed=speed)
             check_set_result(result, primary_fields={"fan_speed"})
 
