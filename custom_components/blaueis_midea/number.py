@@ -97,6 +97,24 @@ class BlaueisMideaSlider(NumberEntity):
                 self._snap_set.append(n)
         self._snap_set.sort()
 
+        # Non-user-selectable raws — values the AC reports for system-only
+        # states (e.g. ``louver_swing_angle_lr_enum = 0`` "released" while
+        # swing mode is active). Read straight from the field's glossary
+        # ``values`` block; entries with ``user_selectable: false`` go in.
+        # The slider's ``native_value`` returns None for those so HA
+        # renders unknown instead of clamping the raw up to ``min`` and
+        # showing a phantom position.
+        self._non_user_selectable_raws: set[int] = set()
+        gdef = coordinator.device.field_gdef(field_name) or {}
+        for vdef in (gdef.get("values") or {}).values():
+            if not isinstance(vdef, dict):
+                continue
+            raw = vdef.get("raw")
+            if raw is None:
+                continue
+            if not vdef.get("user_selectable", True):
+                self._non_user_selectable_raws.add(raw)
+
     @property
     def device_info(self) -> DeviceInfo:
         return self._coord.device_info
@@ -124,6 +142,14 @@ class BlaueisMideaSlider(NumberEntity):
     def native_value(self) -> float | None:
         raw = self._device.read(self._field_name)
         if raw is None:
+            return None
+        if raw in self._non_user_selectable_raws:
+            # AC reports a system-only raw (e.g. "released" while swing
+            # mode is active). The slider can't depict it without lying;
+            # return None so HA renders unknown. Slider stays available
+            # so the user can still drag to set a new position, which
+            # the AC accepts and snaps the slot back into the
+            # user-selectable space.
             return None
         return float(
             max(self._attr_native_min_value, min(raw, self._attr_native_max_value))
