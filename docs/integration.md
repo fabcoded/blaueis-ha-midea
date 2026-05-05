@@ -224,6 +224,18 @@ Entities are **B5-gated** — only capabilities the device explicitly advertises
 
 Source: `const.py:FIELD_CLASS_MAP`.
 
+> **Two entities for one field is intentional** when a `stateful_enum`
+> field's cap declares both a `values` block and a `slider` block —
+> e.g. `louver_swing_angle_lr_enum`, which exposes five labelled
+> positions plus a continuous 1–100 range. Both a `select` (dropdown
+> of the labelled positions) and a `number` (free-range slider) are
+> registered. The dropdown serves the "snap to a standard position"
+> intent; the slider serves the "park at a specific raw" intent
+> (useful for off-grid positions an external controller has set, or
+> fine-grained scripting). Both write to the same wire field; the
+> AC's snap behaviour decides where the vane physically lands.
+> Hiding either would lose a legitimate interaction surface.
+
 ### 4.2 The `climate` entity
 
 A single aggregate entity, unlike the per-field entities above. Absorbs fields listed in `CLIMATE_EXCLUSIVE_FIELDS`:

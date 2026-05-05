@@ -8,6 +8,25 @@ The slider is ALWAYS the secondary control — the primary is the enum
 value (fan_speed=102) lives outside the slider range by design, so the
 slider reports `unavailable` whenever the AC's raw is outside [range_min,
 range_max].
+
+**Two entities for one field is intentional.** A ``stateful_enum``
+field whose cap declares both ``values`` *and* a ``slider`` block
+(e.g. ``louver_swing_angle_lr_enum`` — five labelled positions plus
+a 1-100 continuous slider in the cap) registers both a
+``BlaueisMideaSelect`` (dropdown of the labelled positions) AND a
+``BlaueisMideaSlider`` (free range). Different interaction modes
+serve different intents:
+
+- The dropdown is the "I want one of the standard positions" path —
+  five labelled buttons, easy on the device card.
+- The slider is the "I want a specific raw" path — useful when an
+  external controller has parked the vane off-grid, when the user
+  wants to script a position outside the dropdown set, or when
+  fine-grained control matters more than label-readability.
+
+Both write to the same wire field; the AC's snap behaviour decides
+where the vane physically lands. Hiding either would lose a
+legitimate interaction surface.
 """
 
 from __future__ import annotations
