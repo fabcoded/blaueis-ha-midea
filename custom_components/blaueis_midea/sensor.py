@@ -31,7 +31,10 @@ SENSOR_DEVICE_CLASS = {
     "t1_indoor_coil": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
     "t2_indoor_temp": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
     "t3_outdoor_coil_temp": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
-    "t4_outdoor_ambient_temp": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
+    "t4_outdoor_ambient_temp": (
+        SensorDeviceClass.TEMPERATURE,
+        UnitOfTemperature.CELSIUS,
+    ),
     "discharge_pipe_temp": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
     "humidity_actual": (SensorDeviceClass.HUMIDITY, "%"),
     "humidity_measured": (SensorDeviceClass.HUMIDITY, "%"),
@@ -55,13 +58,37 @@ async def async_setup_entry(
     #   - uptime_s            jumps back to ~0 only on Pi reboot
     #   - process_uptime_s    jumps back to 0 on every gateway restart
     #   - process_started_at  jumps forward (TIMESTAMP) on every restart
-    entities.append(GatewaySensor(coordinator, "cpu_percent", "CPU", SensorDeviceClass.POWER_FACTOR, "%"))
+    entities.append(
+        GatewaySensor(
+            coordinator, "cpu_percent", "CPU", SensorDeviceClass.POWER_FACTOR, "%"
+        )
+    )
     entities.append(GatewaySensor(coordinator, "ram_used_mb", "RAM Used", None, "MB"))
-    entities.append(GatewaySensor(coordinator, "temp_c", "Temperature", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS))
+    entities.append(
+        GatewaySensor(
+            coordinator,
+            "temp_c",
+            "Temperature",
+            SensorDeviceClass.TEMPERATURE,
+            UnitOfTemperature.CELSIUS,
+        )
+    )
     entities.append(GatewaySensor(coordinator, "disk_used_mb", "Disk Used", None, "MB"))
     entities.append(GatewaySensor(coordinator, "disk_free_mb", "Disk Free", None, "MB"))
-    entities.append(GatewaySensor(coordinator, "uptime_s", "Uptime", SensorDeviceClass.DURATION, "s"))
-    entities.append(GatewaySensor(coordinator, "process_uptime_s", "Process Uptime", SensorDeviceClass.DURATION, "s"))
+    entities.append(
+        GatewaySensor(
+            coordinator, "uptime_s", "Uptime", SensorDeviceClass.DURATION, "s"
+        )
+    )
+    entities.append(
+        GatewaySensor(
+            coordinator,
+            "process_uptime_s",
+            "Process Uptime",
+            SensorDeviceClass.DURATION,
+            "s",
+        )
+    )
     entities.append(
         GatewaySensor(
             coordinator,
@@ -109,9 +136,12 @@ class BlaueisMideaSensor(SensorEntity):
         if "unit_of_measurement" in ha_meta:
             self._attr_native_unit_of_measurement = ha_meta["unit_of_measurement"]
         if "suggested_display_precision" in ha_meta:
-            self._attr_suggested_display_precision = ha_meta["suggested_display_precision"]
+            self._attr_suggested_display_precision = ha_meta[
+                "suggested_display_precision"
+            ]
         if "entity_category" in ha_meta:
             from homeassistant.helpers.entity import EntityCategory
+
             self._attr_entity_category = EntityCategory(ha_meta["entity_category"])
         if gdef.get("feature_available", "").endswith("-opt"):
             self._attr_entity_registry_enabled_default = False
@@ -178,9 +208,36 @@ class BlaueisMideaSensor(SensorEntity):
         value = self._coord.device.read(self._field_name)
         if self._off_behavior == "hide" and not self._coord.device.read("power"):
             return None
-        if self._value_lookup and isinstance(value, int) and not isinstance(value, bool):
+        if (
+            self._value_lookup
+            and isinstance(value, int)
+            and not isinstance(value, bool)
+        ):
             return self._value_lookup.get(value, f"Unknown ({value})")
         return value
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Surface value-suppression provenance when the latest read
+        for this field was suppressed (sentinel byte or out-of-range
+        decoded value). The tile shows ``unknown`` either way; this
+        attribute lets a developer or power user see *why* without
+        digging into a diagnostics bundle.
+
+        Returns None when the field has no current suppression so HA
+        does not render an empty attributes block.
+        """
+        full = self._coord.device.read_full(self._field_name)
+        if not full:
+            return None
+        suppression = full.get("suppression")
+        if not suppression:
+            return None
+        return {
+            "last_suppression": suppression.get("reason"),
+            "last_suppression_raw": suppression.get("raw"),
+            "last_suppression_at": suppression.get("ts"),
+        }
 
 
 def _epoch_to_datetime(value: Any) -> datetime | None:
@@ -225,9 +282,7 @@ class GatewaySensor(SensorEntity):
         self._coord = coordinator
         self._stat_key = stat_key
         self._value_transform = value_transform
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_gw_{stat_key}"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_gw_{stat_key}"
         self._attr_name = name
         if device_class:
             self._attr_device_class = device_class
