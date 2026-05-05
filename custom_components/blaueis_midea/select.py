@@ -229,8 +229,11 @@ class BlaueisMideaSelect(SelectEntity):
                 value = option
         # Non-user-selectable options (e.g. "released" / "-- (0)") are
         # surfaced by `options` so HA can render the AC-controlled state
-        # truthfully, but writing them is the AC's prerogative — picking
-        # one in the UI is a no-op. Re-fire write_ha_state so any
+        # truthfully, but writing them from the position selector is a
+        # UI no-op — vane release is owned by the swing-mode select,
+        # which is the canonical way to hand the vane back to the AC.
+        # Splitting the two responsibilities keeps each control's
+        # semantic single-purpose. Re-fire write_ha_state so any
         # optimistic frontend selection snaps back to the actual
         # ``current_option`` (still the AC-reported value).
         if (
