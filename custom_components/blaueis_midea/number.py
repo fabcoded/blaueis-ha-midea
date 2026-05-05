@@ -46,7 +46,8 @@ async def async_setup_entry(
         entities.append(BlaueisMideaSlider(coordinator, fname, fmeta))
     _LOGGER.debug(
         "number platform: %d candidates with slider, %d entities built",
-        candidates, len(entities),
+        candidates,
+        len(entities),
     )
     if entities:
         async_add_entities(entities)
@@ -74,13 +75,15 @@ class BlaueisMideaSlider(NumberEntity):
         )
         ac = fmeta.get("active_constraints") or {}
         slider = ac.get("slider") or {}
-        self._attr_name = slider.get("name") or f"{field_name.replace('_', ' ').title()}"
+        self._attr_name = (
+            slider.get("name") or f"{field_name.replace('_', ' ').title()}"
+        )
 
         r = slider.get("range") or [0, 100]
         self._attr_native_min_value = float(r[0])
         self._attr_native_max_value = float(r[1])
         self._attr_native_step = float(slider.get("step", 1))
-        self._mode = slider.get("mode", "clamp")   # clamp | snap_nearest | reject
+        self._mode = slider.get("mode", "clamp")  # clamp | snap_nearest | reject
 
         # Snap target set: cap's valid_set (if any) filtered to slider range.
         self._snap_set: list[int] = []
@@ -112,6 +115,8 @@ class BlaueisMideaSlider(NumberEntity):
     def available(self) -> bool:
         if not self._coord.connected:
             return False
+        if not self._coord.device_fresh:
+            return False
         power = self._coord.device.read("power")
         return bool(power)
 
@@ -120,13 +125,15 @@ class BlaueisMideaSlider(NumberEntity):
         raw = self._device.read(self._field_name)
         if raw is None:
             return None
-        return float(max(self._attr_native_min_value, min(raw, self._attr_native_max_value)))
+        return float(
+            max(self._attr_native_min_value, min(raw, self._attr_native_max_value))
+        )
 
     async def async_set_native_value(self, value: float) -> None:
         n = int(round(value))
         lo = int(self._attr_native_min_value)
         hi = int(self._attr_native_max_value)
-        n = max(lo, min(hi, n))     # clamp to slider range first
+        n = max(lo, min(hi, n))  # clamp to slider range first
 
         if self._mode == "snap_nearest" and self._snap_set:
             n = min(self._snap_set, key=lambda x: abs(x - n))

@@ -46,7 +46,9 @@ class BlaueisMideaCoordinator:
         self.debug_ring = debug_ring
 
         self.device = Device(
-            host, port, psk=psk,
+            host,
+            port,
+            psk=psk,
             glossary_overrides=glossary_overrides,
         )
         self._entity_callbacks: dict[str, set] = {}  # field_name → {callback, ...}
@@ -60,6 +62,20 @@ class BlaueisMideaCoordinator:
     @property
     def connected(self) -> bool:
         return self._connected
+
+    @property
+    def device_fresh(self) -> bool:
+        """True when the AC has produced fresh data within the staleness
+        window (default: ``poll_interval × 2``).
+
+        Combined with ``connected`` to decide entity availability.
+        ``connected`` says "WebSocket to gateway is up"; ``device_fresh``
+        says "and the AC is actually answering". A connected-but-silent
+        AC (powered off at the breaker, firmware crash) flips this to
+        False after ~2 missed cycles, fading every entity together.
+        Pre-first-frame the device is treated as not fresh.
+        """
+        return self.device.is_fresh()
 
     @property
     def device_name(self) -> str:
@@ -150,15 +166,11 @@ class BlaueisMideaCoordinator:
 
     # ── Entity callback registration ────────────────────────
 
-    def register_entity_callback(
-        self, field_name: str, callback_fn
-    ) -> None:
+    def register_entity_callback(self, field_name: str, callback_fn) -> None:
         """Register an entity's update callback for a field."""
         self._entity_callbacks.setdefault(field_name, set()).add(callback_fn)
 
-    def unregister_entity_callback(
-        self, field_name: str, callback_fn
-    ) -> None:
+    def unregister_entity_callback(self, field_name: str, callback_fn) -> None:
         """Unregister an entity's update callback."""
         cbs = self._entity_callbacks.get(field_name)
         if cbs:
@@ -219,7 +231,9 @@ class BlaueisMideaCoordinator:
         for hook, result in zip(hooks, results):
             if isinstance(result, Exception):
                 _LOGGER.exception(
-                    "Ingress hook %r raised: %s", hook, result,
+                    "Ingress hook %r raised: %s",
+                    hook,
+                    result,
                 )
 
     def _on_gateway_stats(self, stats: dict) -> None:

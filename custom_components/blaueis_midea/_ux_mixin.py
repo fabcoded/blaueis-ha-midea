@@ -27,11 +27,19 @@ def field_ux_available(coordinator, field_name: str) -> bool:
 
     Returns True (visible) when:
       - the coordinator is connected AND
+      - the device is fresh (recent successful ingest) AND
       - the field has no ``ux`` block (permissive default) OR
       - the current mode is in ``ux.visible_in_modes`` (when that key exists) AND
       - any ``ux.hardware_flag`` resolves truthy via the device's caps bitmap.
+
+    The ``device_fresh`` gate fades every UI-visible entity together
+    when the AC stops responding (powered off at breaker, firmware
+    crash, comms partition) without each platform needing its own
+    staleness check.
     """
     if not coordinator.connected:
+        return False
+    if not coordinator.device_fresh:
         return False
     gdef = coordinator.device.field_gdef(field_name)
     return is_field_visible(

@@ -183,7 +183,7 @@ class BlaueisMideaClimate(ClimateEntity):
 
     @property
     def available(self) -> bool:
-        return self._coord.connected
+        return self._coord.connected and self._coord.device_fresh
 
     # ── State properties ────────────────────────────────────
 
