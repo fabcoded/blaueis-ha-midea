@@ -167,11 +167,33 @@ class BlaueisMideaSelect(SelectEntity):
         return bool(power)
 
     @property
+    def options(self) -> list[str]:
+        """Dropdown options, dynamically expanded.
+
+        Base options are the user-selectable labels resolved at
+        init-time from the glossary's ``values`` block. When the AC
+        currently reports a raw whose label is *not* user-selectable
+        (e.g. ``louver_swing_angle_lr_enum = 0`` "released" reported
+        while swing mode is active), append that label so HA can render
+        the truthful state instead of falling back to ``unknown``.
+        Selecting a non-user-selectable option is a UI no-op — see
+        :meth:`async_select_option`.
+        """
+        base = list(self._attr_options)
+        val = self._coord.device.read(self._field_name)
+        if val is not None and val in self._raw_to_name:
+            label = self._raw_to_name[val]
+            if label not in base:
+                base.append(label)
+        return base
+
+    @property
     def current_option(self) -> str | None:
         """Translate the field's raw value → an option the user sees.
 
         1. Exact match in raw→name table → return that name (even for
-           non-user-selectable ones, so HA doesn't flag it as "unknown").
+           non-user-selectable ones — :meth:`options` adds them
+           dynamically so HA accepts the state).
         2. No exact match → snap to the nearest user-selectable raw and
            return its name. Preserves the invariant that the dropdown
            always has a valid selected entry even when the AC reports
@@ -205,6 +227,19 @@ class BlaueisMideaSelect(SelectEntity):
                 value = int(option)
             except ValueError:
                 value = option
+        # Non-user-selectable options (e.g. "released" / "-- (0)") are
+        # surfaced by `options` so HA can render the AC-controlled state
+        # truthfully, but writing them is the AC's prerogative — picking
+        # one in the UI is a no-op. Re-fire write_ha_state so any
+        # optimistic frontend selection snaps back to the actual
+        # ``current_option`` (still the AC-reported value).
+        if (
+            isinstance(value, int)
+            and self._user_selectable_raws
+            and value not in self._user_selectable_raws
+        ):
+            self.async_write_ha_state()
+            return
         validate_or_raise(self._coord, self._field_name, value)
         result = await self._coord.device.set(**{self._field_name: value})
         check_set_result(result, primary_fields={self._field_name})
