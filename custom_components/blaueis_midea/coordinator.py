@@ -58,6 +58,11 @@ class BlaueisMideaCoordinator:
         self._ingress_hooks: list[IngressHook] = []
         self._connected = False
         self.blaueis_follow_me = BlauiesFollowMeManager(hass, self)
+        # Freshness watcher state — drives the periodic re-evaluation of
+        # device_fresh so entity availability follows the AC's silence.
+        # See _freshness_watcher.
+        self._freshness_watcher_task: asyncio.Task | None = None
+        self._last_known_fresh: bool | None = None
 
     @property
     def connected(self) -> bool:
@@ -115,6 +120,16 @@ class BlaueisMideaCoordinator:
         await self.device.start()
         self._connected = True
 
+        # Freshness watcher: HA's availability model is pull-based —
+        # nothing re-evaluates entity.available unless something fires
+        # async_write_ha_state. When the AC goes silent there are no
+        # ingest events, so without an active push entities keep
+        # showing their last-known state. The watcher flips them.
+        self._last_known_fresh = self.device_fresh
+        self._freshness_watcher_task = self.hass.loop.create_task(
+            self._freshness_watcher()
+        )
+
         _LOGGER.info(
             "Blaueis coordinator started: %d available fields, queries=%s",
             len(self.device.available_fields),
@@ -125,6 +140,13 @@ class BlaueisMideaCoordinator:
         """Stop the Device and Follow Me manager."""
         if self.blaueis_follow_me.active or self.blaueis_follow_me._stopping:
             await self.blaueis_follow_me.async_stop()
+        if self._freshness_watcher_task is not None:
+            self._freshness_watcher_task.cancel()
+            try:
+                await self._freshness_watcher_task
+            except asyncio.CancelledError:
+                pass
+            self._freshness_watcher_task = None
         await self.device.stop()
         self._connected = False
 
@@ -183,6 +205,68 @@ class BlaueisMideaCoordinator:
                 cb()
             except Exception:
                 _LOGGER.exception("Entity callback error for %s", field_name)
+
+    def _fire_all_entity_callbacks(self) -> None:
+        """Fire every registered entity callback exactly once.
+
+        Entities register the same bound method (their own
+        ``async_write_ha_state``) under multiple field keys
+        (e.g. switch.py registers it for both the field and
+        ``operating_mode``). Bound methods compare equal on
+        (instance, function), so a ``set`` deduplicates correctly.
+        Used by the freshness watcher to push availability across
+        every entity on a transition.
+        """
+        seen: set = set()
+        for cbs in self._entity_callbacks.values():
+            for cb in cbs:
+                if cb in seen:
+                    continue
+                seen.add(cb)
+                try:
+                    cb()
+                except Exception:
+                    _LOGGER.exception("Entity callback error during freshness push")
+
+    # ── Freshness watcher ───────────────────────────────────
+
+    async def _freshness_watcher(self) -> None:
+        """Periodic re-evaluation of ``device_fresh`` to push entity
+        state on transitions.
+
+        HA's availability model is pull-based: nothing re-evaluates
+        ``entity.available`` unless something invokes
+        ``async_write_ha_state``. When the AC goes silent, there are
+        no ingest events, so without an active push the entities keep
+        rendering their last-known state even though
+        ``device_fresh`` would correctly return False if asked.
+
+        Cadence is the device's poll_interval (~15 s). Faster wouldn't
+        help — state can't change without an ingest. The transition
+        itself happens inside ``Device.is_fresh()`` based on the
+        UTC clock, so we just need to ask periodically.
+        """
+        period = max(1.0, float(self.device.poll_interval))
+        while True:
+            try:
+                await asyncio.sleep(period)
+                current = self.device_fresh
+                if self._last_known_fresh is None:
+                    self._last_known_fresh = current
+                    continue
+                if current == self._last_known_fresh:
+                    continue
+                _LOGGER.info(
+                    "device_fresh: %s → %s — refreshing entities",
+                    self._last_known_fresh,
+                    current,
+                )
+                self._last_known_fresh = current
+                self._fire_all_entity_callbacks()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _LOGGER.exception("freshness watcher error")
 
     # ── Device callbacks ────────────────────────────────────
 
