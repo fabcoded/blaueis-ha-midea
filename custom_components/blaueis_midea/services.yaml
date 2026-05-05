@@ -28,3 +28,27 @@ run_field_inventory:
       default: false
       selector:
         boolean:
+
+test_suppress:
+  name: Test suppression (debug)
+  description: >-
+    Drop every incoming AC frame for the given duration so staleness
+    rules can be verified on a live device without disconnecting it.
+    Auto-clears when the timer expires; pass duration=0 to clear early.
+    Capped at 600 s. Logs a WARNING on each activation.
+  fields:
+    duration:
+      name: Duration (seconds)
+      description: >-
+        How long to suppress incoming frames. 0 clears immediately;
+        values above 600 are clamped.
+      required: true
+      default: 60
+      example: 60
+      selector:
+        number:
+          min: 0
+          max: 600
+          step: 1
+          unit_of_measurement: s
+          mode: slider

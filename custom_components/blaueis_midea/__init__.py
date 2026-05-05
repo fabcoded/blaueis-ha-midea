@@ -160,6 +160,10 @@ async def async_setup_entry(
     from .field_inventory import async_setup_field_inventory
     await async_setup_field_inventory(hass, entry)
 
+    # Register the debug-only test_suppress service (idempotent).
+    from ._test_suppress import async_setup_test_suppress
+    await async_setup_test_suppress(hass)
+
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
 
