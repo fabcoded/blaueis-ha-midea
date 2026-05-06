@@ -60,7 +60,7 @@ PLATFORM_FACTORIES = {
         ("capability", False),
         ("capability-opt", True),
         ("always", False),
-        ("never", False),
+        ("excluded", False),
     ],
 )
 def test_feature_available_drives_registry_disabled(platform, feature_available, expected_disabled):

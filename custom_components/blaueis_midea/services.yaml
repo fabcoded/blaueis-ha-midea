@@ -15,7 +15,7 @@ run_field_inventory:
     suggest_overrides:
       name: Suggest glossary overrides
       description: >-
-        Append YAML override snippets to the report for fields cap-gated to "never"
+        Append YAML override snippets to the report for fields cap-gated to "excluded"
         but observed populated.
       default: true
       selector:

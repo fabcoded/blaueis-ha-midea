@@ -57,11 +57,11 @@ def test_valid_screen_display_override():
 fields:
   control:
     screen_display:
-      feature_available: never
+      feature_available: excluded
 """
     parsed, affected, warnings = validate_and_parse_overrides(yaml_text)
     assert parsed is not None
-    assert parsed["fields"]["control"]["screen_display"]["feature_available"] == "never"
+    assert parsed["fields"]["control"]["screen_display"]["feature_available"] == "excluded"
     assert (
         "fields.control.screen_display.feature_available" in affected
     )
@@ -75,7 +75,7 @@ meta:
 fields:
   control:
     screen_display:
-      feature_available: never
+      feature_available: excluded
 """
     parsed, affected, warnings = validate_and_parse_overrides(yaml_text)
     # Override applied; meta warning surfaced.
