@@ -374,7 +374,97 @@ needs investigation. Pull its log lines (§3.6) and diagnostics (§3.7).
 
 ---
 
-## 7. Privacy & safety conventions
+## 7. Developer deploy via SSH
+
+For changes that require a Python module reload (`.py` edits, new
+platforms, new dependencies), REST-side reload is insufficient — the
+host needs the new files on disk and a `ha core restart`. SSH covers
+that path. For glossary YAML edits alone, after libmidea commit
+`06f75af` (`codec: add invalidate_glossary_cache()`) the integration's
+`async_unload_entry` clears the cache, so a config-entry reload
+(§3.5) is sufficient — no SSH needed.
+
+### 7.1 Key & host vocabulary
+
+| Placeholder | What it is | Where it lives |
+|---|---|---|
+| `${HA_HOST}` | HA host (IP or mDNS), reached via the "Advanced SSH & Web Terminal" add-on as `root` on port 22 | Local config |
+| `${HA_SSH_KEY}` | Workspace-local OpenSSH private key authorised for `root@${HA_HOST}` | Workspace dev-env file (see `../AGENTS.md` "Workspace-local dev environment") |
+
+**Critical permission gotcha.** Workspace files are mounted with mode
+`0777`. OpenSSH refuses to use a private key with such open
+permissions ("Permissions 0777 for '...' are too open ... bad
+permissions"). `chmod 600` on the workspace path does NOT stick —
+it's a mount-level setting. Always copy the key to a private
+location first:
+
+```sh
+cp ${HA_SSH_KEY_WORKSPACE_PATH} /tmp/ha-ssh-key
+chmod 600 /tmp/ha-ssh-key
+SSH="ssh -i /tmp/ha-ssh-key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+```
+
+The same gotcha applies to the gateway Pi key (`hvacpi.key`) —
+copy + chmod 600 before any `ssh` / `scp` invocation that uses it.
+
+### 7.2 Deploy the integration
+
+The integration ships as `custom_components/blaueis_midea/` under
+the HA `/config/` directory. To push the working tree:
+
+```sh
+# From the blaueis-ha-midea repo root.
+tar --exclude="__pycache__" --exclude="*.pyc" \
+    -cf - custom_components/blaueis_midea | \
+  $SSH root@${HA_HOST} "cd /config && tar -xf -"
+```
+
+`rsync` is not present on the HAOS-default add-on; the `tar | ssh
+'tar -xf -'` pipe is the portable equivalent. The
+`__pycache__` exclusion avoids shipping our local bytecode (would
+trigger a full re-compile on the host anyway).
+
+### 7.3 Restart & verify
+
+```sh
+# Restart HA core (~30-60 s; affects all integrations).
+curl -s -X POST -H "Authorization: Bearer ${HA_TOKEN}" \
+  "${HA_URL}/api/services/homeassistant/restart"
+
+# Poll until the entry is loaded again.
+until curl -s -H "Authorization: Bearer ${HA_TOKEN}" \
+        "${HA_URL}/api/config/config_entries/entry?domain=blaueis_midea" \
+      | jq -e '.[] | select(.state=="loaded")' >/dev/null 2>&1; do
+  sleep 3
+done
+
+# Then walk §5 (Override verification recipe) or §6 (debug recipes).
+```
+
+### 7.4 What needs which path
+
+| Change | Reload path | Restart needed? |
+|---|---|---|
+| Bundled `glossary.yaml` only (after sync from libmidea) | `/api/config/config_entries/entry/${ENTRY_ID}/reload` | No (post-`06f75af`) |
+| `.py` edits in the integration | `/api/services/homeassistant/restart` | Yes |
+| New platforms / new dependencies | `/api/services/homeassistant/restart` | Yes |
+| Config-entry options (host/port/PSK, glossary overrides) | Auto on save via options-flow | No |
+
+### 7.5 Gateway Pi access
+
+The gateway runs on a separate device (`gateway.local` / a static
+IP). Update flow, deploy paths, and SSH conventions are documented
+in `../blaueis-libmidea/docs/operations.md` §"Operations" and the
+"Live-gateway safety" rules in `blaueis-libmidea/AGENTS.md`.
+
+The same workspace-perms gotcha applies — copy `hvacpi.key` to
+`/tmp` and `chmod 600` before use. Don't trigger the gateway update
+flow without explicit per-operation approval (per the AGENTS.md
+rule).
+
+---
+
+## 8. Privacy & safety conventions
 
 Agents working with HA touch user-identifiable state. Apply these
 rules before any artefact leaves the local machine:
@@ -417,7 +507,7 @@ rules before any artefact leaves the local machine:
 
 ---
 
-## 8. Scope of this runbook
+## 9. Scope of this runbook
 
 In scope: REST + WebSocket recipes for the existing integration's
 documented surface, plus the override-verification flow that the
