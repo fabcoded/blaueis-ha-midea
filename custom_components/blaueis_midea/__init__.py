@@ -244,6 +244,15 @@ async def async_unload_entry(
         await coordinator.async_stop()
         _uninstall_debug_ring(entry)
 
+        # Drop the libmidea module-level glossary cache so a config-entry
+        # reload picks up changes to the vendored glossary.yaml without
+        # requiring a full HA restart. Cheap (the next setup re-reads the
+        # YAML once); without this, a developer pushing a glossary update
+        # via the integration update flow sees stale state until restart.
+        from blaueis.core.codec import invalidate_glossary_cache
+
+        invalidate_glossary_cache()
+
     return unload_ok
 
 
