@@ -33,14 +33,13 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
 from blaueis.core.codec import load_glossary
-from blaueis.core.glossary_override import apply_override
+from blaueis.core.glossary_override import OverrideMessage, apply_override
 
 _LOGGER = logging.getLogger(__name__)
 
 # Path to the schema, vendored alongside the glossary.
 _SCHEMA_PATH = (
-    Path(__file__).parent / "lib" / "blaueis" / "core" / "data"
-    / "glossary_schema.json"
+    Path(__file__).parent / "lib" / "blaueis" / "core" / "data" / "glossary_schema.json"
 )
 
 
@@ -70,10 +69,10 @@ _SCHEMA: dict = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
 
 def validate_and_parse_overrides(
     yaml_text: str | None,
-) -> tuple[dict | None, list[str], list[str]]:
+) -> tuple[dict | None, list[str], list[OverrideMessage]]:
     """Parse + validate an override YAML string.
 
-    Returns ``(parsed_override, affected_paths, warnings)``:
+    Returns ``(parsed_override, affected_paths, messages)``:
 
     - ``parsed_override``: the dict that should be passed to
       ``Device(glossary_overrides=...)``, or ``None`` if no override
@@ -81,8 +80,11 @@ def validate_and_parse_overrides(
     - ``affected_paths``: dotted leaf paths of leaves that the merge
       would change in the merged glossary. Used by G12 for the
       "N fields affected" message and G9 for the merged view markers.
-    - ``warnings``: messages from sanitize_override (e.g. "meta block
-      stripped"). Surfaced to the user.
+    - ``messages``: structured ``OverrideMessage`` records from the
+      override merge — protected-key strips plus per-field exclusion
+      gating outcomes (``excluded_accepted`` / ``excluded_caveat`` /
+      ``excluded_rejected``). The integration renders these as the
+      user-facing status block. See ``docs/exclusion_reasons.md``.
 
     Raises ``GlossaryOverrideError`` for anything the user can fix:
 
@@ -121,13 +123,14 @@ def validate_and_parse_overrides(
     # and reject only schema violations that did not exist before the
     # override was applied.
     base = load_glossary()
-    merged, affected, warnings = apply_override(base, parsed)
+    merged, affected, messages = apply_override(base, parsed)
 
     schema = _SCHEMA
     validator = Draft202012Validator(schema)
     base_signatures = {_error_signature(e) for e in validator.iter_errors(base)}
     new_errors = [
-        e for e in validator.iter_errors(merged)
+        e
+        for e in validator.iter_errors(merged)
         if _error_signature(e) not in base_signatures
     ]
     new_errors.sort(key=lambda e: list(e.absolute_path))
@@ -142,7 +145,7 @@ def validate_and_parse_overrides(
             )
         raise GlossaryOverrideError(msg)
 
-    return parsed, affected, warnings
+    return parsed, affected, messages
 
 
 # ── Helpers ────────────────────────────────────────────────────────────

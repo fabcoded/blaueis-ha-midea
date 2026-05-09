@@ -33,6 +33,7 @@
           "follow_me_function_safety_timeout": "Follow Me — Sensor timeout (seconds)",
           "display_buzzer_mode": "Display & Buzzer mode",
           "glossary_overrides_yaml": "Advanced — Glossary overrides (YAML)",
+          "override_parse_status_display": "Override parse status",
           "run_inventory_scan_now": "Run new inventory scan on submit",
           "latest_field_inventory_display": "Latest field inventory report"
         },
@@ -45,6 +46,7 @@
           "follow_me_function_safety_timeout": "Maximum sensor age in seconds before the reading is considered stale and Follow Me temp-disables. Catches sensors that stop updating without going to 'unavailable'. Default 300 s.",
           "display_buzzer_mode": "Controls the AC display LED and, by extension, the buzzer. Non-enforced lets you control the display freely; Forced modes keep the display in the selected state and the integration re-asserts it if the remote changes it.",
           "glossary_overrides_yaml": "Developer / debugging only — leave empty for normal operation. See the integration README for the override format and examples.",
+          "override_parse_status_display": "Read-only result of parsing the stored override above. Empty when no override is configured. 'parse ok' = applied with no caveats. 'parse with warning (check log)' = applied but emitted exclusion-gating notes for fields whose decoder or write path is unverified — see Settings → System → Logs. 'parse failed (check log)' = stored YAML did not validate; the integration ignores the override at runtime.",
           "run_inventory_scan_now": "Tick and save to trigger a fresh field-inventory scan. Takes ~10-15 s; reopen Configure afterwards to see the result below. Each scan replaces the single cached entry — no history accumulates.",
           "latest_field_inventory_display": "Read-only preview of the latest scan. Includes a human-readable timestamp comment at the top. Cached on disk and rehydrated after HA restart — re-running a scan replaces this single entry. Select + copy to share."
         }

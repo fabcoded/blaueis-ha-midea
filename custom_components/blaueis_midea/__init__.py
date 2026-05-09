@@ -94,6 +94,7 @@ async def async_setup_entry(
 
     # Pre-load glossary in executor to avoid blocking the event loop
     from blaueis.core.codec import load_glossary
+
     await hass.async_add_executor_job(load_glossary)
 
     _migrate_renamed_unique_ids(hass, entry)
@@ -109,7 +110,10 @@ async def async_setup_entry(
     glossary_overrides = _parse_stored_overrides(entry)
 
     coordinator = BlaueisMideaCoordinator(
-        hass, host, port, psk,
+        hass,
+        host,
+        port,
+        psk,
         debug_ring=debug_ring,
         glossary_overrides=glossary_overrides,
     )
@@ -158,10 +162,12 @@ async def async_setup_entry(
     # Register the field-inventory service + HTTP view (global,
     # registered on first entry setup; no-op on subsequent entries).
     from .field_inventory import async_setup_field_inventory
+
     await async_setup_field_inventory(hass, entry)
 
     # Register the debug-only test_suppress service (idempotent).
     from ._test_suppress import async_setup_test_suppress
+
     await async_setup_test_suppress(hass)
 
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
@@ -218,9 +224,7 @@ async def _async_options_updated(
     # entities are recreated against the new available_fields. This is
     # the same path a fresh setup takes — clean, no special-case state.
     if _override_changed(entry):
-        _LOGGER.info(
-            "Glossary override changed — reloading config entry to apply"
-        )
+        _LOGGER.info("Glossary override changed — reloading config entry to apply")
         await hass.config_entries.async_reload(entry.entry_id)
         return
 
@@ -235,6 +239,7 @@ async def async_unload_entry(
     if unload_ok:
         # Unlink any outstanding inventory tempfiles for this entry.
         from .field_inventory import async_teardown_field_inventory
+
         await async_teardown_field_inventory(hass, entry)
         await coordinator.async_stop()
         _uninstall_debug_ring(entry)
@@ -244,8 +249,10 @@ async def async_unload_entry(
 
 # ── Field-rename migration ─────────────────────────────────────────────
 
+
 def _migrate_renamed_unique_ids(
-    hass: HomeAssistant, entry: BlaueisMideaConfigEntry,
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
 ) -> None:
     """Rewrite entity_registry unique_ids for fields whose canonical name
     changed in the glossary.
@@ -275,7 +282,9 @@ def _migrate_renamed_unique_ids(
                 reg.async_update_entity(ent.entity_id, new_unique_id=new_uid)
                 _LOGGER.info(
                     "Migrated unique_id: %s %s → %s",
-                    ent.entity_id, ent.unique_id, new_uid,
+                    ent.entity_id,
+                    ent.unique_id,
+                    new_uid,
                 )
                 renamed += 1
                 break
@@ -298,15 +307,19 @@ def _parse_stored_overrides(entry: BlaueisMideaConfigEntry) -> dict | None:
     if not raw:
         return None
     try:
-        parsed, _affected, warnings = validate_and_parse_overrides(raw)
+        parsed, _affected, messages = validate_and_parse_overrides(raw)
     except GlossaryOverrideError as err:
         _LOGGER.warning(
-            "Stored glossary override failed re-validation; ignoring. "
-            "Error: %s", err,
+            "Stored glossary override failed re-validation; ignoring. Error: %s",
+            err,
         )
         return None
-    for w in warnings:
-        _LOGGER.info("Glossary override warning: %s", w)
+    for m in messages:
+        where = m.field or "<top>"
+        if m.severity in ("error", "warning"):
+            _LOGGER.warning("Glossary override [%s] %s: %s", m.code, where, m.message)
+        else:
+            _LOGGER.info("Glossary override [%s] %s: %s", m.code, where, m.message)
     return parsed
 
 
@@ -323,8 +336,10 @@ def _override_changed(entry: BlaueisMideaConfigEntry) -> bool:
 
 # ── Follow Me Function key migration ────────────────────────────────────
 
+
 def _migrate_fmf_keys(
-    hass: HomeAssistant, entry: BlaueisMideaConfigEntry,
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
 ) -> None:
     """Rewrite legacy Follow Me option keys to their new names.
 
@@ -366,8 +381,10 @@ def _migrate_fmf_keys(
 
 # ── Follow Me invariant: Configured ⇒ Enabled ─────────────────────────
 
+
 def _enforce_fmf_invariant(
-    hass: HomeAssistant, entry: BlaueisMideaConfigEntry,
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
 ) -> bool:
     """Force-clear the Enabled flag when Configured is off.
 
@@ -398,6 +415,7 @@ def _enforce_fmf_invariant(
 
 
 # ── Follow Me switch registration ───────────────────────────────────────
+
 
 def _sync_fm_switch_registration(
     hass: HomeAssistant,
@@ -445,8 +463,10 @@ def _sync_fm_switch_registration(
 
 # ── Display & Buzzer mode migration ────────────────────────────────────
 
+
 def _migrate_display_buzzer_options(
-    hass: HomeAssistant, entry: BlaueisMideaConfigEntry,
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
 ) -> None:
     """Migrate legacy ``display_buzzer_mode`` option values in the config
     entry to the current policy keys.
@@ -463,13 +483,17 @@ def _migrate_display_buzzer_options(
     if new_value is None:
         _LOGGER.warning(
             "Unknown %s value %r in config entry — leaving as-is",
-            CONF_DISPLAY_BUZZER_MODE, raw,
+            CONF_DISPLAY_BUZZER_MODE,
+            raw,
         )
         return
     new_options = {**entry.options, CONF_DISPLAY_BUZZER_MODE: new_value}
     hass.config_entries.async_update_entry(entry, options=new_options)
     _LOGGER.info(
-        "Migrated %s: %r → %r", CONF_DISPLAY_BUZZER_MODE, raw, new_value,
+        "Migrated %s: %r → %r",
+        CONF_DISPLAY_BUZZER_MODE,
+        raw,
+        new_value,
     )
 
 
@@ -522,16 +546,18 @@ def _cleanup_orphaned_field_entities(
             continue
         if not ent.unique_id.startswith(prefix):
             continue
-        suffix = ent.unique_id[len(prefix):]
+        suffix = ent.unique_id[len(prefix) :]
 
         # Pass 1: glossary-field-driven.
         if suffix in all_field_names:
             if suffix in available:
-                continue   # field still advertised — entity belongs
+                continue  # field still advertised — entity belongs
             _LOGGER.info(
                 "Removing orphaned field entity %s (unique_id=%s) — "
                 "field %r no longer in available_fields",
-                ent.entity_id, ent.unique_id, suffix,
+                ent.entity_id,
+                ent.unique_id,
+                suffix,
             )
             reg.async_remove(ent.entity_id)
             removed += 1
@@ -540,16 +566,18 @@ def _cleanup_orphaned_field_entities(
         # Pass 2: synthetic with declared cap dependency.
         deps = SYNTHETIC_ENTITY_CAP_DEPENDENCIES.get(suffix)
         if deps is None:
-            continue   # not in catalog → integration owns it, leave alone
+            continue  # not in catalog → integration owns it, leave alone
         if not deps:
-            continue   # no dependencies → never auto-remove
+            continue  # no dependencies → never auto-remove
         missing = deps - available
         if not missing:
-            continue   # all required fields present
+            continue  # all required fields present
         _LOGGER.info(
             "Removing orphaned synthetic entity %s (unique_id=%s) — "
             "required cap field(s) %s no longer in available_fields",
-            ent.entity_id, ent.unique_id, sorted(missing),
+            ent.entity_id,
+            ent.unique_id,
+            sorted(missing),
         )
         reg.async_remove(ent.entity_id)
         removed += 1
@@ -557,11 +585,13 @@ def _cleanup_orphaned_field_entities(
     if removed:
         _LOGGER.info(
             "Cleaned up %d orphaned entit%s",
-            removed, "y" if removed == 1 else "ies",
+            removed,
+            "y" if removed == 1 else "ies",
         )
 
 
 # ── DebugRing plumbing ─────────────────────────────────────────────────
+
 
 def _install_debug_ring(entry: BlaueisMideaConfigEntry):
     """Create a per-entry DebugRing, attach it to the blaueis loggers.
@@ -590,7 +620,8 @@ def _install_debug_ring(entry: BlaueisMideaConfigEntry):
     entry._blaueis_ring_loggers = attached  # type: ignore[attr-defined]
     _LOGGER.debug(
         "DebugRing attached to %d loggers (%d MB)",
-        len(attached), DEBUG_RING_SIZE_MB,
+        len(attached),
+        DEBUG_RING_SIZE_MB,
     )
     return ring
 

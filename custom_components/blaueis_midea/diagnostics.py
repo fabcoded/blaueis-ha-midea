@@ -6,6 +6,7 @@ WS command), merges them by timestamp, and returns a redacted dict. The HA
 
 See blaueis-libmidea/docs/flight_recorder.md §4.4.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -77,7 +78,8 @@ async def async_get_config_entry_diagnostics(
 
 
 def _glossary_override_section(
-    entry: ConfigEntry, coordinator,
+    entry: ConfigEntry,
+    coordinator,
 ) -> dict[str, Any]:
     """Build the diagnostics block for the device's glossary override.
 
@@ -87,7 +89,14 @@ def _glossary_override_section(
     - ``yaml``: the raw user-supplied text (empty string if unset).
     - ``affected_paths``: dotted paths of leaves the override changed
       in the merged glossary view (empty list if no override).
-    - ``meta``: cached integer count, used for quick sanity checks.
+    - ``messages``: structured ``OverrideMessage`` records — protected-
+      key strips and per-field exclusion gating outcomes
+      (``excluded_accepted`` / ``excluded_caveat`` / ``excluded_rejected``).
+      Forensic surface for issue reports; the user-facing surface lives
+      in the config-flow status block. Empty list when no override is
+      set or the stored YAML fails re-validation (the integration
+      ignores the override at runtime in that case).
+    - ``meta``: cached integer counts, used for quick sanity checks.
 
     The full merged glossary is intentionally NOT included by default —
     it's a few hundred KB and is mostly identical to the un-overridden
@@ -96,12 +105,38 @@ def _glossary_override_section(
     """
     yaml_text = entry.options.get(CONF_GLOSSARY_OVERRIDES, "") or ""
     affected = list(getattr(coordinator.device, "glossary_override_affected", []))
+    messages: list[dict[str, Any]] = []
+    if yaml_text.strip():
+        # Re-run validate-and-parse to capture structured messages for
+        # the dump. Cheap (one merge) and avoids stashing state on the
+        # device just for diagnostics. Failure to re-validate is logged
+        # at runtime (see __init__.py); here we silently produce an
+        # empty messages list, the user's YAML is still in `yaml` for
+        # them to inspect.
+        try:
+            from ._glossary_override import validate_and_parse_overrides
+
+            _, _, msg_objs = validate_and_parse_overrides(yaml_text)
+            for m in msg_objs:
+                messages.append(
+                    {
+                        "severity": m.severity,
+                        "code": m.code,
+                        "field": m.field,
+                        "reasons": list(m.reasons),
+                        "message": m.message,
+                    }
+                )
+        except Exception:  # noqa: BLE001 — diagnostics must not crash
+            messages = []
     return {
         "yaml": yaml_text,
         "affected_paths": affected,
+        "messages": messages,
         "meta": {
             "yaml_bytes": len(yaml_text),
             "affected_count": len(affected),
+            "messages_count": len(messages),
         },
     }
 

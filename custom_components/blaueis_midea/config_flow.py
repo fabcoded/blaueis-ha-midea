@@ -114,8 +114,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-
-
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Single-step options flow.
 
@@ -146,9 +144,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # rejections abort the save and re-show the form with errors.
             override_text = user_input.get(CONF_GLOSSARY_OVERRIDES, "") or ""
             try:
-                _, affected, warnings = validate_and_parse_overrides(
-                    override_text
-                )
+                _, affected, messages = validate_and_parse_overrides(override_text)
             except GlossaryOverrideError as err:
                 errors[CONF_GLOSSARY_OVERRIDES] = "invalid_override"
                 _LOGGER.warning("Glossary override rejected: %s", err)
@@ -165,14 +161,31 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # confirmation form approach hit a HA flow-data-filtering
             # quirk that stripped options to empty between the form and
             # storage). Save directly.
+            #
+            # The user-visible parse-status surface is the read-only
+            # `override_parse_status_display` field below the override
+            # textarea — it shows "parse ok" / "parse with warning
+            # (check log)" / "parse failed (check log)" based on the
+            # *stored* YAML the next time the user opens Configure.
+            # Per-field detail (which field, which reasons) lives in
+            # the HA log lines emitted below and in the diagnostics
+            # dump's `glossary_override.messages` array.
             if affected:
                 _LOGGER.info(
                     "Glossary override accepted: %d leaf path(s) affected (%s)",
                     len(affected),
                     ", ".join(affected[:5]) + ("…" if len(affected) > 5 else ""),
                 )
-            for w in warnings:
-                _LOGGER.info("Glossary override warning: %s", w)
+            for m in messages:
+                where = m.field or "<top>"
+                if m.severity in ("error", "warning"):
+                    _LOGGER.warning(
+                        "Glossary override [%s] %s: %s", m.code, where, m.message
+                    )
+                else:
+                    _LOGGER.info(
+                        "Glossary override [%s] %s: %s", m.code, where, m.message
+                    )
             # The ``run_inventory_scan_now`` checkbox is a trigger, not
             # a setting — fire the scan service if it was ticked, then
             # drop the value so it doesn't persist. User re-opens
@@ -206,6 +219,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # user submits for it (the value is recomputed from
             # coordinator state on every form render).
             user_input.pop("latest_field_inventory_display", None)
+            user_input.pop("override_parse_status_display", None)
             new_options = {**self._config_entry.options, **user_input}
             return self.async_create_entry(title="", data=new_options)
 
@@ -238,12 +252,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # rejects ANY submit that disagrees, deadlocking the form.
         coord = getattr(self._config_entry, "runtime_data", None)
         cap_available = (
-            coord is not None
-            and "screen_display" in coord.device.available_fields
+            coord is not None and "screen_display" in coord.device.available_fields
         )
-        current_dbm = opts.get(
-            CONF_DISPLAY_BUZZER_MODE, DISPLAY_BUZZER_MODE_DEFAULT
-        )
+        current_dbm = opts.get(CONF_DISPLAY_BUZZER_MODE, DISPLAY_BUZZER_MODE_DEFAULT)
         if current_dbm not in DISPLAY_BUZZER_POLICIES:
             current_dbm = DISPLAY_BUZZER_POLICY_NON_ENFORCED
 
@@ -287,13 +298,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # Display & Buzzer mode — persisted default. The select
             # entity on the device's control page also writes this
             # option live when the user picks a forced_* option.
-            schema_dict[
-                vol.Optional(CONF_DISPLAY_BUZZER_MODE, default=current_dbm)
-            ] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=list(DISPLAY_BUZZER_POLICIES),
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                    translation_key=CONF_DISPLAY_BUZZER_MODE,
+            schema_dict[vol.Optional(CONF_DISPLAY_BUZZER_MODE, default=current_dbm)] = (
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=list(DISPLAY_BUZZER_POLICIES),
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_DISPLAY_BUZZER_MODE,
+                    )
                 )
             )
         # Advanced — glossary overrides (multiline YAML).
@@ -315,6 +326,33 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             )
         )
 
+        # Read-only parse-status display for the *stored* override YAML.
+        # Recomputed on every form render. One of:
+        #   ""                                — no override configured
+        #   "parse ok"                        — validates clean, no messages
+        #   "parse with warning (check log)"  — validates but emitted messages
+        #                                       (per-field exclusion-gating
+        #                                       outcomes — see logs for detail)
+        #   "parse failed (check log)"        — validation raised; override is
+        #                                       ignored at runtime by
+        #                                       __init__._parse_stored_overrides
+        # Submitted value is ignored (popped in async_step_init); same
+        # pattern as latest_field_inventory_display.
+        parse_status = _compute_override_parse_status(
+            opts.get(CONF_GLOSSARY_OVERRIDES, "") or ""
+        )
+        schema_dict[
+            vol.Optional(
+                "override_parse_status_display",
+                default=parse_status,
+            )
+        ] = selector.TextSelector(
+            selector.TextSelectorConfig(
+                multiline=False,
+                type=selector.TextSelectorType.TEXT,
+            )
+        )
+
         # Advanced — "run a new scan on submit" trigger. Ticked + Submit
         # fires the blaueis_midea.run_field_inventory service. Scan runs
         # as a background task; the user re-opens Configure ~15 s later
@@ -325,9 +363,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # every Save. The submitted value is dropped in async_step_init,
         # never persisted to entry.options — see HA form-data trap §4
         # (a persistent-True default-True field can never be unticked).
-        schema_dict[
-            vol.Optional("run_inventory_scan_now", default=False)
-        ] = selector.BooleanSelector()
+        schema_dict[vol.Optional("run_inventory_scan_now", default=False)] = (
+            selector.BooleanSelector()
+        )
 
         # Advanced — latest field-inventory report. Read-only(-ish):
         # the field is writable by voluptuous rules but we ignore
@@ -364,6 +402,26 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders=placeholders,
         )
 
+
+def _compute_override_parse_status(yaml_text: str) -> str:
+    """Return the read-only parse-status string shown below the override
+    textarea. One of: "", "parse ok", "parse with warning (check log)",
+    or "parse failed (check log)". Recomputed on every form render from
+    the *stored* YAML (not the user's pending edits)."""
+    if not yaml_text or not yaml_text.strip():
+        return ""
+    try:
+        _, _, messages = validate_and_parse_overrides(yaml_text)
+    except GlossaryOverrideError:
+        return "parse failed (check log)"
+    except Exception:  # noqa: BLE001 — display field must never crash form
+        _LOGGER.exception(
+            "Glossary override status: unexpected error while computing parse status"
+        )
+        return "parse failed (check log)"
+    if not messages:
+        return "parse ok"
+    return "parse with warning (check log)"
 
 
 def _build_latest_inventory_display(coord) -> str:
