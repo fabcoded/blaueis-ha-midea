@@ -5,9 +5,10 @@ permitted raw within the slider range.
 
 The slider is ALWAYS the secondary control — the primary is the enum
 (handled elsewhere: climate.fan_mode or a select entity). The auto/escape
-value (fan_speed=102) lives outside the slider range by design, so the
-slider reports `unavailable` whenever the AC's raw is outside [range_min,
-range_max].
+value (fan_speed=102) lives outside the slider range by design: the slider
+renders its value as **unknown** whenever the AC's raw is outside
+[range_min, range_max], and it can only *write* values inside that range —
+Auto is set via the fan-mode dropdown, never by this slider.
 
 **Two entities for one field is intentional.** A field whose active cap
 declares both an enum (``values`` / presets) *and* a ``slider`` block
@@ -173,9 +174,13 @@ class BlaueisMideaSlider(NumberEntity):
             # the AC accepts and snaps the slot back into the
             # user-selectable space.
             return None
-        return float(
-            max(self._attr_native_min_value, min(raw, self._attr_native_max_value))
-        )
+        if not (self._attr_native_min_value <= raw <= self._attr_native_max_value):
+            # Raws outside the manual slider range are not percentages — e.g.
+            # the Auto preset (fan_speed=102). Render unknown rather than
+            # clamping to a phantom min/max. Auto is set via the fan-mode
+            # dropdown; this slider only writes manual values within range.
+            return None
+        return float(raw)
 
     async def async_set_native_value(self, value: float) -> None:
         n = int(round(value))

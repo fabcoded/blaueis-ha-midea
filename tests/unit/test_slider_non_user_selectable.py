@@ -7,6 +7,11 @@ display a phantom position. Instead, ``native_value`` returns
 ``None`` so HA renders the slider's state as unknown, while
 ``available`` stays True so the user can still drag to engage a
 real position.
+
+The same unknown-not-clamped rule applies to raws *outside* the slider
+range — e.g. the Auto preset (``fan_speed = 102``). Those are not manual
+positions; the slider renders unknown and can only ever *write* values
+within range, so Auto is set via the fan-mode dropdown, never the slider.
 """
 
 from __future__ import annotations
@@ -95,6 +100,19 @@ def test_native_value_clamps_off_grid_user_value():
     state and represents a real position."""
     sl = _make_slider(_coord(current_raw=23))
     assert sl.native_value == 23.0  # within range, no clamp triggers
+
+
+def test_native_value_none_for_out_of_range_escape():
+    """A raw outside the slider range (e.g. the Auto preset fan_speed=102,
+    or any value above max) is not a manual position — render unknown
+    rather than clamping to a phantom max."""
+    sl = _make_slider(_coord(current_raw=150))
+    assert sl.native_value is None
+
+
+def test_native_value_normal_at_range_bounds():
+    assert _make_slider(_coord(current_raw=100)).native_value == 100.0
+    assert _make_slider(_coord(current_raw=1)).native_value == 1.0
 
 
 def test_native_value_none_when_field_unread():
