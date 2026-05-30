@@ -1,5 +1,10 @@
 """Constants for the Blaueis Midea integration."""
 
+# The vendored-lib path is inserted in __init__.py before any submodule
+# (including this one) is imported, so ``blaueis.core`` resolves here — same
+# pattern as _ux_mixin.py.
+from blaueis.core.ux_gating import MODE_INT_TO_NAME
+
 DOMAIN = "blaueis_midea"
 
 CONF_PSK = "psk"
@@ -79,13 +84,11 @@ CONF_FMF_SAFETY_TIMEOUT = "follow_me_function_safety_timeout"
 CONF_FMF_SENSOR         = "follow_me_function_sensor"
 
 # ── Midea operating_mode enum → HA HVACMode ────────────────
-MODE_MIDEA_TO_HA = {
-    1: "auto",
-    2: "cool",
-    3: "dry",
-    4: "heat",
-    5: "fan_only",
-}
+# Single source lives in the vendored core (``ux_gating.MODE_INT_TO_NAME``),
+# where it is also matched against ``ux.visible_in_modes``. The mode names are
+# already the HA HVACMode vocabulary (``fan_only`` etc.), so HA reuses it
+# verbatim instead of keeping a second copy in sync.
+MODE_MIDEA_TO_HA = dict(MODE_INT_TO_NAME)
 MODE_HA_TO_MIDEA = {v: k for k, v in MODE_MIDEA_TO_HA.items()}
 
 # ── Fan speed presets ──────────────────────────────────────
