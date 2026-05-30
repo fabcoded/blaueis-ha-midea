@@ -9,24 +9,27 @@ value (fan_speed=102) lives outside the slider range by design, so the
 slider reports `unavailable` whenever the AC's raw is outside [range_min,
 range_max].
 
-**Two entities for one field is intentional.** A ``stateful_enum``
-field whose cap declares both ``values`` *and* a ``slider`` block
-(e.g. ``louver_swing_angle_lr_enum`` — five labelled positions plus
-a 1-100 continuous slider in the cap) registers both a
-``BlaueisMideaSelect`` (dropdown of the labelled positions) AND a
-``BlaueisMideaSlider`` (free range). Different interaction modes
-serve different intents:
+**Two entities for one field is intentional.** A field whose active cap
+declares both an enum (``values`` / presets) *and* a ``slider`` block
+registers the enum as the primary control AND a ``BlaueisMideaSlider``
+for the free range. Today the only such field is ``fan_speed`` (primary:
+``climate.fan_mode`` presets; secondary: this slider). The two serve
+different intents:
 
-- The dropdown is the "I want one of the standard positions" path —
-  five labelled buttons, easy on the device card.
-- The slider is the "I want a specific raw" path — useful when an
-  external controller has parked the vane off-grid, when the user
-  wants to script a position outside the dropdown set, or when
-  fine-grained control matters more than label-readability.
+- The preset path — "I want one of the standard speeds" — easy on the
+  device card.
+- The slider path — "I want a specific raw" — fine-grained control, or a
+  value outside the preset set.
 
-Both write to the same wire field; the AC's snap behaviour decides
-where the vane physically lands. Hiding either would lose a
-legitimate interaction surface.
+Both write to the same wire field. On ``fan_speed`` the device honours
+free values across the range (bench-confirmed 2026-05-29: a commanded 33
+reads back 33, RPM tracks monotonically), so the slider is meaningful.
+
+The louver-angle fields (``louver_swing_angle_lr/ud_enum``) previously
+carried sliders too, but the vane was bench-confirmed **discrete-only**
+(off-grid B0 angle values are rejected — the vane holds position, not
+snapped), so their cap ``slider`` blocks were removed. Louver is
+select-only.
 """
 
 from __future__ import annotations
