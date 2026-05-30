@@ -25,21 +25,17 @@ from .coordinator import BlaueisMideaCoordinator
 # codes, cumulative counters, instantaneous power).
 OFF_BEHAVIORS = frozenset({"hide", "available"})
 
-# Map glossary field names to HA sensor device classes and units
+# Legacy hardcoded fallback — applied per-attribute only when a field's glossary
+# `ha:` block doesn't already declare device_class / unit (see use site below).
+# Shrinks as fields migrate; these four are the only sensors still lacking an
+# `ha:` device_class+unit. The temperature/frequency sensors that already carry
+# `ha:` blocks were removed from here — the fallback was a verified no-op for
+# them. Delete this table entirely once these four migrate into the glossary.
 SENSOR_DEVICE_CLASS = {
-    "indoor_temperature": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
-    "outdoor_temperature": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
-    "t1_indoor_coil": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
     "t2_indoor_temp": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
     "t3_outdoor_coil_temp": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
-    "t4_outdoor_ambient_temp": (
-        SensorDeviceClass.TEMPERATURE,
-        UnitOfTemperature.CELSIUS,
-    ),
-    "discharge_pipe_temp": (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
     "humidity_actual": (SensorDeviceClass.HUMIDITY, "%"),
     "humidity_measured": (SensorDeviceClass.HUMIDITY, "%"),
-    "compressor_frequency": (SensorDeviceClass.FREQUENCY, "Hz"),
 }
 
 

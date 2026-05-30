@@ -67,6 +67,10 @@ def _fmeta() -> dict:
     }
 
 
+# NOTE: louver is now select-only (no slider block), so this is a *synthetic*
+# fixture — a stand-in for "a field with a slider + a user_selectable:false
+# value". It exercises the generic _non_user_selectable_raws / out-of-range
+# mechanism that fan_speed (the only live slider) also relies on.
 def _make_slider(coord) -> BlaueisMideaSlider:
     return BlaueisMideaSlider(coord, "louver_swing_angle_lr_enum", _fmeta())
 

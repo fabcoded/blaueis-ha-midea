@@ -120,13 +120,14 @@ class BlaueisMideaSlider(NumberEntity):
                 self._snap_set.append(n)
         self._snap_set.sort()
 
-        # Non-user-selectable raws — values the AC reports for system-only
-        # states (e.g. ``louver_swing_angle_lr_enum = 0`` "released" while
-        # swing mode is active). Read straight from the field's glossary
-        # ``values`` block; entries with ``user_selectable: false`` go in.
-        # The slider's ``native_value`` returns None for those so HA
-        # renders unknown instead of clamping the raw up to ``min`` and
-        # showing a phantom position.
+        # Non-user-selectable raws — values a field marks
+        # ``user_selectable: false`` (a position the AC owns, not the user).
+        # Read straight from the field's glossary ``values`` block. The
+        # slider's ``native_value`` returns None for those so HA renders
+        # unknown instead of clamping the raw up to ``min`` and showing a
+        # phantom position. No live field currently has both a slider block
+        # and such a value (louver is select-only, fan_speed has none), but
+        # the mechanism is generic and cheap to keep.
         self._non_user_selectable_raws: set[int] = set()
         gdef = coordinator.device.field_gdef(field_name) or {}
         for vdef in (gdef.get("values") or {}).values():
@@ -167,12 +168,10 @@ class BlaueisMideaSlider(NumberEntity):
         if raw is None:
             return None
         if raw in self._non_user_selectable_raws:
-            # AC reports a system-only raw (e.g. "released" while swing
-            # mode is active). The slider can't depict it without lying;
-            # return None so HA renders unknown. Slider stays available
-            # so the user can still drag to set a new position, which
-            # the AC accepts and snaps the slot back into the
-            # user-selectable space.
+            # The field reports a raw it marks user_selectable: false (a
+            # system-owned position). The slider can't depict it without
+            # lying; return None so HA renders unknown. The slider stays
+            # available so the user can still drag to set a real position.
             return None
         if not (self._attr_native_min_value <= raw <= self._attr_native_max_value):
             # Raws outside the manual slider range are not percentages — e.g.
