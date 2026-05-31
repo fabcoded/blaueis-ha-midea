@@ -82,6 +82,15 @@ _FIELD_RENAMES: dict[str, str] = {
     "total_run_power_kwh": "power_total_run_kwh",
     "current_run_power_kwh": "power_current_run_kwh",
     "realtime_power_kw": "power_realtime_kw",
+    # Breeze-family correction: property 0x42 is Breeze Away (prevent-straight-wind),
+    # not the no-wind "breezeless" feature (which is 0x18). Only this rename is
+    # collision-safe here: its target "breeze_away" is NOT itself a key, so the
+    # idempotent re-run can't chain it onward. The sibling renames (0x33
+    # breeze_away->wind_avoid, 0x18 no_wind_sense->breezeless) reuse the same tokens
+    # and would chain-migrate this entity on a later setup, so they are deliberately
+    # NOT added here — those fields are hidden on our SKU (no entity to migrate); a
+    # guarded one-time migration is needed before adding them for SKUs that expose them.
+    "breezeless": "breeze_away",
 }
 
 
