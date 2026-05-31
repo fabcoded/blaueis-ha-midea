@@ -30,7 +30,9 @@ from .const import (
     MODE_HA_TO_MIDEA,
     MODE_MIDEA_TO_HA,
     PRESET_NAME_TO_FIELD,
+    SWING_AXES,
 )
+from ._swing import axis_mode, axis_options, axis_set_changes
 from .coordinator import BlaueisMideaCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,8 +75,15 @@ class BlaueisMideaClimate(ClimateEntity):
             | ClimateEntityFeature.TURN_OFF
         )
 
-        if "louver_swing_vertical" in avail:
+        # Swing & vane-position — per axis (vertical → swing_mode,
+        # horizontal → swing_horizontal_mode). Options are built from caps in
+        # _axis_options(); an axis with neither swing nor positions is dropped.
+        if any(SWING_AXES["vertical"][k] in avail for k in ("swing", "angle")):
             features |= ClimateEntityFeature.SWING_MODE
+            self._attr_swing_modes = self._axis_options("vertical")
+        if any(SWING_AXES["horizontal"][k] in avail for k in ("swing", "angle")):
+            features |= ClimateEntityFeature.SWING_HORIZONTAL_MODE
+            self._attr_swing_horizontal_modes = self._axis_options("horizontal")
 
         # ── Presets (B5-gated) ─────────────────────────────
         self._available_presets: dict[str, str] = {}  # field_name → preset_name
@@ -137,12 +146,6 @@ class BlaueisMideaClimate(ClimateEntity):
         step = constraints.get("step")
         self._attr_target_temperature_step = step if step else 1.0
 
-        # ── Swing modes ────────────────────────────────────
-        if features & ClimateEntityFeature.SWING_MODE:
-            self._attr_swing_modes = ["off", "vertical"]
-            if "louver_swing_horizontal" in avail:
-                self._attr_swing_modes.append("horizontal")
-                self._attr_swing_modes.append("both")
 
     def _determine_hvac_modes(self) -> list[HVACMode]:
         """Determine available HVAC modes from B5 capabilities."""
@@ -214,19 +217,40 @@ class BlaueisMideaClimate(ClimateEntity):
             return self._fan_custom_label
         return name
 
+    # ── Swing / vane-position helpers (per axis) ───────────
+    # Mapping logic lives in the HA-free _swing module (unit-tested directly);
+    # these thin wrappers bind it to the live device.
+    def _axis_options(self, axis: str) -> list[str]:
+        """Option list for an axis, from its caps (['off'] + swing + positions)."""
+        return axis_options(axis, self._device.available_fields)
+
+    def _axis_mode(self, axis: str) -> str:
+        """Current option for an axis: swing wins, else a position, else off."""
+        return axis_mode(axis, self._device.available_fields, self._device.read)
+
+    async def _set_axis(self, axis: str, option: str) -> None:
+        """Set one axis with a SINGLE field write; the firmware enforces the
+        exclusion and clears the mutually-exclusive sibling."""
+        changes = axis_set_changes(
+            axis, option, self._device.available_fields, self._device.read
+        )
+        if changes is None:
+            _LOGGER.warning("blaueis: ignoring unsupported %s swing option %r", axis, option)
+            return
+        result = await self._device.set(**changes)
+        check_set_result(result, primary_fields=set(changes))
+
     @property
     def swing_mode(self) -> str | None:
-        v = self._device.read("louver_swing_vertical")
-        h = self._device.read("louver_swing_horizontal")
-        v_on = v not in (None, 0, False)
-        h_on = h not in (None, 0, False)
-        if v_on and h_on:
-            return "both"
-        if v_on:
-            return "vertical"
-        if h_on:
-            return "horizontal"
-        return "off"
+        if not (self._attr_supported_features & ClimateEntityFeature.SWING_MODE):
+            return None
+        return self._axis_mode("vertical")
+
+    @property
+    def swing_horizontal_mode(self) -> str | None:
+        if not (self._attr_supported_features & ClimateEntityFeature.SWING_HORIZONTAL_MODE):
+            return None
+        return self._axis_mode("horizontal")
 
     @property
     def preset_mode(self) -> str | None:
@@ -272,20 +296,10 @@ class BlaueisMideaClimate(ClimateEntity):
             check_set_result(result, primary_fields={"fan_speed"})
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        # Glossary raw values — codec masks to field bit width before placing
-        # in the byte. Previous 0xC was the already-shifted in-byte pattern,
-        # which the codec then re-masked down to 0 (= OFF). Confirmed on the
-        # wire: raw 3 puts 0b11 into bits[3:2] of body[7] → 0x0C → ON.
-        v = swing_mode in ("vertical", "both")
-        h = swing_mode in ("horizontal", "both")
-        changes = {}
-        if "louver_swing_vertical" in self._device.available_fields:
-            changes["louver_swing_vertical"] = 3 if v else 0
-        if "louver_swing_horizontal" in self._device.available_fields:
-            changes["louver_swing_horizontal"] = 3 if h else 0
-        if changes:
-            result = await self._device.set(**changes)
-            check_set_result(result, primary_fields=set(changes))
+        await self._set_axis("vertical", swing_mode)
+
+    async def async_set_swing_horizontal_mode(self, swing_horizontal_mode: str) -> None:
+        await self._set_axis("horizontal", swing_horizontal_mode)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set preset — clears all other presets first."""

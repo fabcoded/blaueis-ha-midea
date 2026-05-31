@@ -25,6 +25,7 @@ from ._glossary_override import (  # noqa: E402
     validate_and_parse_overrides,
 )
 from .const import (  # noqa: E402
+    CLIMATE_EXCLUSIVE_FIELDS,
     CONF_DISPLAY_BUZZER_MODE,
     CONF_FMF_CONFIGURED,
     CONF_FMF_ENABLED,
@@ -569,6 +570,21 @@ def _cleanup_orphaned_field_entities(
 
         # Pass 1: glossary-field-driven.
         if suffix in all_field_names:
+            if suffix in CLIMATE_EXCLUSIVE_FIELDS:
+                # The climate entity owns this field (fan speed, swing/vane,
+                # presets, …) — no standalone entity should exist, even though
+                # the field stays in available_fields. Remove any pre-existing
+                # one (e.g. the louver_swing_* selects folded into swing_mode).
+                _LOGGER.info(
+                    "Removing standalone entity %s (unique_id=%s) — field %r is "
+                    "climate-exclusive (owned by the climate entity)",
+                    ent.entity_id,
+                    ent.unique_id,
+                    suffix,
+                )
+                reg.async_remove(ent.entity_id)
+                removed += 1
+                continue
             if suffix in available:
                 continue  # field still advertised — entity belongs
             _LOGGER.info(

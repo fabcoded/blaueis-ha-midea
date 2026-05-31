@@ -37,11 +37,16 @@ CLIMATE_CALLBACK_FIELDS = frozenset({
     "indoor_temperature",
     "louver_swing_vertical",
     "louver_swing_horizontal",
+    "louver_swing_angle_ud_enum",
+    "louver_swing_angle_lr_enum",
     *CLIMATE_PRESET_FIELDS.keys(),
 })
 
 # Fields consumed exclusively by the climate entity.
-# These are NOT created as standalone entities (no separate switch/sensor).
+# These are NOT created as standalone entities (no separate switch/sensor),
+# and any pre-existing standalone entity for them is removed on setup (see
+# _cleanup_orphaned_field_entities). The four louver fields are folded into the
+# climate swing_mode / swing_horizontal_mode dropdowns.
 # Note: power and indoor_temperature are NOT here — power has no standalone
 # switch (climate on/off handles it), but indoor_temperature IS a standalone
 # sensor in addition to being climate's current_temperature.
@@ -49,8 +54,35 @@ CLIMATE_EXCLUSIVE_FIELDS = frozenset({
     "operating_mode",
     "target_temperature",
     "fan_speed",
+    "louver_swing_vertical",
+    "louver_swing_horizontal",
+    "louver_swing_angle_ud_enum",
+    "louver_swing_angle_lr_enum",
     *CLIMATE_PRESET_FIELDS.keys(),
 })
+
+# ── Swing & vane-position model (climate.py) ───────────────
+# Per-axis native climate enums combine oscillation ("swing") with the fixed
+# vane positions — mutually exclusive on the hardware. We send only the touched
+# field; the firmware enforces the exclusion and clears the sibling.
+SWING_OFF = "off"
+SWING_ON = "swing"
+SWING_ON_RAW = 3   # louver_swing_* "on" raw (0b11 in the swing bits)
+
+# axis → {swing field, angle field}. "vertical" → swing_mode,
+# "horizontal" → swing_horizontal_mode.
+SWING_AXES = {
+    "vertical": {"swing": "louver_swing_vertical", "angle": "louver_swing_angle_ud_enum"},
+    "horizontal": {"swing": "louver_swing_horizontal", "angle": "louver_swing_angle_lr_enum"},
+}
+
+# Fixed-position option strings per axis, keyed by the angle raw value
+# (Gree-style; HA title-cases for display, e.g. "upper_middle" → "Upper Middle").
+# raw 0 ("released") is NOT a position — it maps to the "off" option.
+POS_LABELS = {
+    "vertical": {1: "upper", 25: "upper_middle", 50: "middle", 75: "lower_middle", 100: "lower"},
+    "horizontal": {1: "left", 25: "left_center", 50: "center", 75: "right_center", 100: "right"},
+}
 
 # ── Glossary field_class → HA entity type mapping ──────────
 # writable=True/False selects the column.
