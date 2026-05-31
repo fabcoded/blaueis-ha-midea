@@ -157,7 +157,7 @@ class TestHumanize:
 
     def test_field_fallback(self):
         assert _humanize_field("jet_cool") == "Jet Cool"
-        assert _humanize_field("swing_vertical") == "Swing Vertical"
+        assert _humanize_field("louver_swing_vertical") == "Louver Swing Vertical"
 
     def test_rejection_single_mode(self):
         msg = _humanize_rejection("requires mode ['heat'], current=2")

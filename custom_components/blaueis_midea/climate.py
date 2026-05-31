@@ -73,7 +73,7 @@ class BlaueisMideaClimate(ClimateEntity):
             | ClimateEntityFeature.TURN_OFF
         )
 
-        if "swing_vertical" in avail:
+        if "louver_swing_vertical" in avail:
             features |= ClimateEntityFeature.SWING_MODE
 
         # ── Presets (B5-gated) ─────────────────────────────
@@ -140,7 +140,7 @@ class BlaueisMideaClimate(ClimateEntity):
         # ── Swing modes ────────────────────────────────────
         if features & ClimateEntityFeature.SWING_MODE:
             self._attr_swing_modes = ["off", "vertical"]
-            if "swing_horizontal" in avail:
+            if "louver_swing_horizontal" in avail:
                 self._attr_swing_modes.append("horizontal")
                 self._attr_swing_modes.append("both")
 
@@ -216,8 +216,8 @@ class BlaueisMideaClimate(ClimateEntity):
 
     @property
     def swing_mode(self) -> str | None:
-        v = self._device.read("swing_vertical")
-        h = self._device.read("swing_horizontal")
+        v = self._device.read("louver_swing_vertical")
+        h = self._device.read("louver_swing_horizontal")
         v_on = v not in (None, 0, False)
         h_on = h not in (None, 0, False)
         if v_on and h_on:
@@ -279,10 +279,10 @@ class BlaueisMideaClimate(ClimateEntity):
         v = swing_mode in ("vertical", "both")
         h = swing_mode in ("horizontal", "both")
         changes = {}
-        if "swing_vertical" in self._device.available_fields:
-            changes["swing_vertical"] = 3 if v else 0
-        if "swing_horizontal" in self._device.available_fields:
-            changes["swing_horizontal"] = 3 if h else 0
+        if "louver_swing_vertical" in self._device.available_fields:
+            changes["louver_swing_vertical"] = 3 if v else 0
+        if "louver_swing_horizontal" in self._device.available_fields:
+            changes["louver_swing_horizontal"] = 3 if h else 0
         if changes:
             result = await self._device.set(**changes)
             check_set_result(result, primary_fields=set(changes))

@@ -35,8 +35,8 @@ CLIMATE_CALLBACK_FIELDS = frozenset({
     "target_temperature",
     "fan_speed",
     "indoor_temperature",
-    "swing_vertical",
-    "swing_horizontal",
+    "louver_swing_vertical",
+    "louver_swing_horizontal",
     *CLIMATE_PRESET_FIELDS.keys(),
 })
 
