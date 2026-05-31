@@ -48,11 +48,12 @@ PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.SELECT,
     Platform.NUMBER,
-    # Platform.BUTTON was used to expose a 'Run field inventory scan'
-    # entity on the AC device page. It moved into the Configure form
-    # (as a 'Run new scan on submit' checkbox) because that's where
-    # the scan result also surfaces — all inventory UX in one place.
-    # The button.py module is retained but no longer forwarded.
+    # Re-enabled to surface glossary-driven `trigger` fields as one-tap
+    # buttons (e.g. filter_clean_reset). The old 'Run field inventory scan'
+    # button moved into the Configure form; button.py now builds buttons
+    # from the glossary trigger fields (cap-gated, so none appear on units
+    # without the capability).
+    Platform.BUTTON,
 ]
 
 # Loggers attached to the per-entry DebugRing. Keeping the list explicit (not

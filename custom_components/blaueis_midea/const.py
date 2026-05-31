@@ -61,6 +61,9 @@ FIELD_CLASS_MAP = {
     "stateful_numeric":    ("number",     "sensor"),
     "sensor":              (None,         "sensor"),
     "binary_sensor":       ("binary_sensor", "binary_sensor"),
+    # A trigger is a momentary, write-only command (no persistent state).
+    # Writable → a one-tap Button; there is no read-only form.
+    "trigger":             ("button",     None),
 }
 
 # ── Follow Me Function config options ─────────────────────
