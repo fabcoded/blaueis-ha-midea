@@ -23,6 +23,7 @@ load.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from pathlib import Path
@@ -125,12 +126,33 @@ def validate_and_parse_overrides(
     base = load_glossary()
     merged, affected, messages = apply_override(base, parsed)
 
+    # The schema requires excluded_reasons whenever feature_available ==
+    # 'excluded'. That is a canonical-glossary quality gate (provenance /
+    # auditability), NOT a user-input constraint: a user is allowed to hide
+    # a field by pasting `feature_available: excluded` without justifying it
+    # with a protocol-taxonomy reason. The base glossary has zero reason-less
+    # excluded fields, so any that appear in the merged result were created
+    # by this override — give them a synthetic reason for validation only
+    # (never persisted; `parsed` is returned untouched). Other schema errors
+    # on the field still surface normally.
+    validation_target = copy.deepcopy(merged)
+    for category in (validation_target.get("fields") or {}).values():
+        if not isinstance(category, dict):
+            continue
+        for fdef in category.values():
+            if (
+                isinstance(fdef, dict)
+                and fdef.get("feature_available") == "excluded"
+                and not fdef.get("excluded_reasons")
+            ):
+                fdef["excluded_reasons"] = ["unnecessary_automation"]
+
     schema = _SCHEMA
     validator = Draft202012Validator(schema)
     base_signatures = {_error_signature(e) for e in validator.iter_errors(base)}
     new_errors = [
         e
-        for e in validator.iter_errors(merged)
+        for e in validator.iter_errors(validation_target)
         if _error_signature(e) not in base_signatures
     ]
     new_errors.sort(key=lambda e: list(e.absolute_path))
