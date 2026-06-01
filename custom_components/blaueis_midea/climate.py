@@ -55,6 +55,12 @@ class BlaueisMideaClimate(ClimateEntity):
 
     _attr_has_entity_name = True
     _attr_name = None  # Use device name
+    # Entity translation_key — maps the climate state-attribute option slugs
+    # (swing_mode / swing_horizontal_mode) to labels in translations/<lang>.json
+    # under entity.climate.blaueis_ac.state_attributes.*. Without it the custom
+    # swing/vane slugs render raw (e.g. "upper_middle"). No top-level `name`
+    # entry is provided, so this stays the device's main (device-named) entity.
+    _attr_translation_key = "blaueis_ac"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _enable_turn_on_off_backwards_compat = False
     should_poll = False
@@ -78,12 +84,15 @@ class BlaueisMideaClimate(ClimateEntity):
         # Swing & vane-position — per axis (vertical → swing_mode,
         # horizontal → swing_horizontal_mode). Options are built from caps in
         # _axis_options(); an axis with neither swing nor positions is dropped.
+        # Feature presence is decided once at setup (an axis with neither a
+        # swing nor an angle field at boot has no control). The OPTION LISTS are
+        # computed LIVE (swing_modes / swing_horizontal_modes properties below)
+        # from available_fields, so a cap change can never leave the dropdown
+        # offering a vane position that the set path then silently rejects.
         if any(SWING_AXES["vertical"][k] in avail for k in ("swing", "angle")):
             features |= ClimateEntityFeature.SWING_MODE
-            self._attr_swing_modes = self._axis_options("vertical")
         if any(SWING_AXES["horizontal"][k] in avail for k in ("swing", "angle")):
             features |= ClimateEntityFeature.SWING_HORIZONTAL_MODE
-            self._attr_swing_horizontal_modes = self._axis_options("horizontal")
 
         # ── Presets (B5-gated) ─────────────────────────────
         self._available_presets: dict[str, str] = {}  # field_name → preset_name
@@ -116,21 +125,16 @@ class BlaueisMideaClimate(ClimateEntity):
             display = vdef.get("label", key) if isinstance(vdef, dict) else key
             self._fan_name_to_raw[display] = raw
             self._fan_raw_to_name.setdefault(raw, display)
-        custom_vdef = fan_ac.get("custom_value")
-        self._fan_custom_label: str | None = (
-            custom_vdef.get("label") if isinstance(custom_vdef, dict) else None
-        )
         if self._fan_name_to_raw:
-            modes = list(self._fan_name_to_raw.keys())
-            if self._fan_custom_label:
-                modes.append(self._fan_custom_label)
-            self._attr_fan_modes = modes
+            # Option A: an off-grid fan_speed (no named preset for that raw)
+            # surfaces as a blank fan tile (fan_mode -> None), not a synthetic
+            # "Custom" option — the dropdown lists only the real named presets.
+            self._attr_fan_modes = list(self._fan_name_to_raw.keys())
         else:
             # Pre-B5 fallback
             self._attr_fan_modes = list(FAN_PRESET_TO_SPEED.keys())
             self._fan_name_to_raw = dict(FAN_PRESET_TO_SPEED)
             self._fan_raw_to_name = dict(FAN_SPEED_TO_PRESET)
-            self._fan_custom_label = None
 
         # ── Temperature range (B5 constraints) ─────────────
         temp_meta = avail.get("target_temperature", {})
@@ -212,10 +216,8 @@ class BlaueisMideaClimate(ClimateEntity):
         speed = self._device.read("fan_speed")
         if speed is None:
             return None
-        name = self._fan_raw_to_name.get(speed)
-        if name is None and self._fan_custom_label:
-            return self._fan_custom_label
-        return name
+        # Option A: an off-grid raw (no named preset) blanks the tile (None).
+        return self._fan_raw_to_name.get(speed)
 
     # ── Swing / vane-position helpers (per axis) ───────────
     # Mapping logic lives in the HA-free _swing module (unit-tested directly);
@@ -239,6 +241,22 @@ class BlaueisMideaClimate(ClimateEntity):
             return
         result = await self._device.set(**changes)
         check_set_result(result, primary_fields=set(changes))
+
+    @property
+    def swing_modes(self) -> list[str] | None:
+        """Vertical-axis option list, computed live from caps on every read
+        (plain property, not a cached __init__ snapshot — so the offered
+        options always match what the set path will accept)."""
+        if not (self._attr_supported_features & ClimateEntityFeature.SWING_MODE):
+            return None
+        return self._axis_options("vertical")
+
+    @property
+    def swing_horizontal_modes(self) -> list[str] | None:
+        """Horizontal-axis option list, computed live (see ``swing_modes``)."""
+        if not (self._attr_supported_features & ClimateEntityFeature.SWING_HORIZONTAL_MODE):
+            return None
+        return self._axis_options("horizontal")
 
     @property
     def swing_mode(self) -> str | None:
@@ -287,8 +305,6 @@ class BlaueisMideaClimate(ClimateEntity):
             check_set_result(result, primary_fields={"target_temperature"})
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
-        if fan_mode == self._fan_custom_label:
-            fan_mode = "Auto"
         speed = self._fan_name_to_raw.get(fan_mode)
         if speed is not None:
             validate_or_raise(self._coord, "fan_speed", speed)

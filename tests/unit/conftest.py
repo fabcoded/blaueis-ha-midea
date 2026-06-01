@@ -74,6 +74,40 @@ sys.modules["homeassistant.components.select"].SelectEntity = _RealSelectEntity
 sys.modules["homeassistant.components.switch"].SwitchEntity = _RealSwitchEntity
 
 
+# Climate base + enums must be real so the entity instantiates and its
+# bitwise supported_features / @property overrides behave like production.
+import enum  # noqa: E402
+
+
+class _RealClimateEntity:
+    pass
+
+
+class _ClimateEntityFeature(enum.IntFlag):
+    TARGET_TEMPERATURE = 1
+    FAN_MODE = 8
+    PRESET_MODE = 16
+    SWING_MODE = 32
+    TURN_ON = 128
+    TURN_OFF = 256
+    SWING_HORIZONTAL_MODE = 512
+
+
+class _HVACMode(str, enum.Enum):
+    OFF = "off"
+    AUTO = "auto"
+    COOL = "cool"
+    HEAT = "heat"
+    DRY = "dry"
+    FAN_ONLY = "fan_only"
+
+
+sys.modules.setdefault("homeassistant.components.climate", MagicMock())
+sys.modules["homeassistant.components.climate"].ClimateEntity = _RealClimateEntity
+sys.modules["homeassistant.components.climate"].ClimateEntityFeature = _ClimateEntityFeature
+sys.modules["homeassistant.components.climate"].HVACMode = _HVACMode
+
+
 class FakeState:
     """Mimics homeassistant.core.State for sensor readings."""
 
