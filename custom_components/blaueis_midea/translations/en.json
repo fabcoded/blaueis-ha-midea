@@ -76,6 +76,34 @@
           "forced_off": "Forced off"
         }
       }
+    },
+    "climate": {
+      "blaueis_ac": {
+        "state_attributes": {
+          "swing_mode": {
+            "state": {
+              "off": "Off",
+              "swing": "Swing",
+              "upper": "Upper",
+              "upper_middle": "Upper Middle",
+              "middle": "Middle",
+              "lower_middle": "Lower Middle",
+              "lower": "Lower"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "off": "Off",
+              "swing": "Swing",
+              "left": "Left",
+              "left_center": "Left Center",
+              "center": "Center",
+              "right_center": "Right Center",
+              "right": "Right"
+            }
+          }
+        }
+      }
     }
   },
   "exceptions": {
