@@ -5,11 +5,12 @@ Notable changes to the Blaueis Midea integration.
 ## [Unreleased]
 
 ### Fixed
-- **Climate presets are now mode-aware.** A preset invalid in the current
-  operating mode (e.g. Frost Protection in cool) is no longer offered in the
-  dropdown, so it can't be selected and rejected. Presets stay mutually
-  exclusive (only one active), the displayed selection is always one of the
-  offered options, and a rejected/unapplied preset now reverts the card to the
+- **Climate presets are now power- and mode-aware.** While the unit is off no
+  presets are offered (they can't engage), and a preset invalid in the current
+  operating mode (e.g. Frost Protection in cool) is no longer offered either —
+  so neither can be selected and then rejected. Presets stay mutually exclusive
+  (only one active), the displayed selection is always one of the offered
+  options, and a rejected/unapplied preset reverts the card to the
   actually-active selection instead of leaving the attempted pick showing.
 - **Vane positions no longer silently break mid-session.** After boot, the
   device can push unsolicited B5 capability frames that inconsistently report

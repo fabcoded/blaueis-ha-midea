@@ -290,12 +290,16 @@ class BlaueisMideaClimate(ClimateEntity):
 
     @property
     def preset_modes(self) -> list[str] | None:
-        """Live preset list: 'none' plus only the mutually-exclusive presets
-        valid in the current mode. Computed each read (not a cached __init__
-        snapshot), so the card never offers — and the base class never
-        accepts — a preset the device would reject in this mode."""
+        """Live preset list: 'none' plus only the presets selectable right now.
+        Computed each read (not a cached __init__ snapshot), so the card never
+        offers — and the base class never accepts — a preset the device would
+        reject. Presets only engage while running, so while powered off nothing
+        but 'none' is offered; otherwise only the mutually-exclusive presets
+        valid in the current mode (e.g. Frost Protection is hidden in cool)."""
         if not self._available_presets:
             return None
+        if not self._device.read("power"):
+            return [PRESET_NONE]
         return [
             PRESET_NONE,
             *(
@@ -307,11 +311,13 @@ class BlaueisMideaClimate(ClimateEntity):
 
     @property
     def preset_mode(self) -> str | None:
-        """The active preset, or 'none'. Only a preset that is BOTH active and
-        valid in the current mode is reported, so the displayed selection
-        always matches an offered option."""
+        """The active preset, or 'none'. Only a preset that is active AND
+        currently selectable (powered on, valid in the current mode) is
+        reported, so the displayed selection always matches an offered option."""
         if not self._available_presets:
             return None
+        if not self._device.read("power"):
+            return PRESET_NONE
         for field_name, preset_name in self._available_presets.items():
             if self._device.read(field_name) and self._preset_visible(field_name):
                 return preset_name
@@ -355,12 +361,16 @@ class BlaueisMideaClimate(ClimateEntity):
         await self._set_axis("horizontal", swing_horizontal_mode)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        """Set preset — clears all other presets first (mutually exclusive,
+        """Set preset — clears the other presets first (mutually exclusive,
         so only one is ever active)."""
         changes = {}
         primary: set[str] = set()
+        # Only clear presets that are valid in the current mode: a mode-invalid
+        # one can't be active anyway, and sending it (even =off) just trips the
+        # mode gate and logs a spurious rejection.
         for field_name in self._available_presets:
-            changes[field_name] = False
+            if self._preset_visible(field_name):
+                changes[field_name] = False
         if preset_mode != PRESET_NONE:
             target_field = PRESET_NAME_TO_FIELD.get(preset_mode)
             if target_field and target_field in self._available_presets:
