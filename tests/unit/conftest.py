@@ -80,7 +80,9 @@ import enum  # noqa: E402
 
 
 class _RealClimateEntity:
-    pass
+    # No-op state push so set-methods that re-sync the card can run in tests.
+    def async_write_ha_state(self):
+        pass
 
 
 class _ClimateEntityFeature(enum.IntFlag):
