@@ -19,9 +19,9 @@ PRESET_FIELDS = ["turbo_mode", "eco_mode", "sleep_mode", "frost_protection"]
 COOL, HEAT = 2, 4
 
 
-def _entity(mode, active=None, set_result=None):
+def _entity(mode, active=None, power=True, set_result=None):
     """mode = operating_mode raw int; active = the preset field currently on."""
-    reads = {"operating_mode": mode}
+    reads = {"operating_mode": mode, "power": power}
     for f in PRESET_FIELDS:
         reads[f] = f == active
     coord = MagicMock()
@@ -67,15 +67,32 @@ def test_preset_mode_none_when_idle():
     assert _entity(COOL).preset_mode == "none"
 
 
+def test_no_presets_offered_when_off():
+    # Presets only engage while running (the device power-gates them), so a
+    # powered-off unit offers nothing but 'none'.
+    ent = _entity(COOL, power=False)
+    assert ent.preset_modes == ["none"]
+    assert ent.preset_mode == "none"
+
+
+def test_active_preset_not_shown_when_off():
+    # Even if a preset flag is still set, while off it's neither displayed nor
+    # offered (it can't be engaged).
+    ent = _entity(COOL, active="turbo_mode", power=False)
+    assert ent.preset_mode == "none"
+    assert "Turbo" not in ent.preset_modes
+
+
 async def test_set_preset_clears_others_and_sets_target():
     ent = _entity(HEAT)
     await ent.async_set_preset_mode("Frost Protection")
     kwargs = ent._device.set.call_args.kwargs
     assert kwargs["frost_protection"] is True
-    # mutual exclusion: every other preset explicitly cleared
+    # mutual exclusion: the other mode-valid presets are cleared
     assert kwargs["turbo_mode"] is False
-    assert kwargs["eco_mode"] is False
     assert kwargs["sleep_mode"] is False
+    # eco is invalid in heat, so it isn't sent at all (would trip the mode gate)
+    assert "eco_mode" not in kwargs
 
 
 async def test_rejected_preset_resyncs_card():
