@@ -20,6 +20,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from blaueis.core.codec import walk_fields
+from blaueis.core.ux_gating import is_field_visible
+
 from . import BlaueisMideaConfigEntry
 from ._preflight import validate_or_raise
 from ._set_result import check_set_result
@@ -100,12 +103,19 @@ class BlaueisMideaClimate(ClimateEntity):
             if field_name in avail:
                 self._available_presets[field_name] = preset_name
 
+        # The preset list is computed LIVE (preset_modes property) so only
+        # presets valid in the current operating mode are offered — e.g.
+        # Frost Protection (heat-only) is hidden in cool, instead of being
+        # offered and then rejected by the device with a stale selection left
+        # showing. _preset_gdefs caches each preset field's glossary def for the
+        # visibility check.
+        self._preset_gdefs: dict[str, dict] = {}
         if self._available_presets:
             features |= ClimateEntityFeature.PRESET_MODE
-            self._attr_preset_modes = [
-                PRESET_NONE,
-                *self._available_presets.values(),
-            ]
+            all_fields = walk_fields(self._device.glossary)
+            self._preset_gdefs = {
+                f: all_fields.get(f, {}) for f in self._available_presets
+            }
 
         self._attr_supported_features = features
 
@@ -270,13 +280,40 @@ class BlaueisMideaClimate(ClimateEntity):
             return None
         return self._axis_mode("horizontal")
 
+    def _preset_visible(self, field_name: str) -> bool:
+        """Whether a preset is selectable in the current operating mode
+        (heat-only Frost Protection is hidden in cool, etc.)."""
+        return is_field_visible(
+            self._preset_gdefs.get(field_name, {}),
+            current_mode=self._device.read("operating_mode"),
+        )
+
+    @property
+    def preset_modes(self) -> list[str] | None:
+        """Live preset list: 'none' plus only the mutually-exclusive presets
+        valid in the current mode. Computed each read (not a cached __init__
+        snapshot), so the card never offers — and the base class never
+        accepts — a preset the device would reject in this mode."""
+        if not self._available_presets:
+            return None
+        return [
+            PRESET_NONE,
+            *(
+                name
+                for field, name in self._available_presets.items()
+                if self._preset_visible(field)
+            ),
+        ]
+
     @property
     def preset_mode(self) -> str | None:
-        """Return the active preset, or 'none'."""
+        """The active preset, or 'none'. Only a preset that is BOTH active and
+        valid in the current mode is reported, so the displayed selection
+        always matches an offered option."""
         if not self._available_presets:
             return None
         for field_name, preset_name in self._available_presets.items():
-            if self._device.read(field_name):
+            if self._device.read(field_name) and self._preset_visible(field_name):
                 return preset_name
         return PRESET_NONE
 
@@ -318,7 +355,8 @@ class BlaueisMideaClimate(ClimateEntity):
         await self._set_axis("horizontal", swing_horizontal_mode)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        """Set preset — clears all other presets first."""
+        """Set preset — clears all other presets first (mutually exclusive,
+        so only one is ever active)."""
         changes = {}
         primary: set[str] = set()
         for field_name in self._available_presets:
@@ -330,7 +368,13 @@ class BlaueisMideaClimate(ClimateEntity):
                 primary.add(target_field)
         if changes:
             result = await self._device.set(**changes)
-            check_set_result(result, primary_fields=primary)
+            try:
+                check_set_result(result, primary_fields=primary)
+            finally:
+                # Re-push the real state so a rejected / unapplied preset
+                # reverts in the card to the actually-active one instead of
+                # leaving the attempted selection shown.
+                self.async_write_ha_state()
 
     async def async_turn_on(self) -> None:
         result = await self._device.set(power=True)
