@@ -36,6 +36,7 @@ from .const import (
     SWING_AXES,
 )
 from ._swing import axis_mode, axis_options, axis_set_changes
+from ._ux_mixin import interlock_states
 from .coordinator import BlaueisMideaCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -288,11 +289,13 @@ class BlaueisMideaClimate(ClimateEntity):
         already lives in ``preset_modes`` (none-only when off) — so this is parity
         with the prior mode gate plus the now-live capability-mode axis (e.g. turbo
         cap restricting which modes offer it)."""
+        gdef = self._preset_gdefs.get(field_name, {})
         return evaluate_offered(
-            self._preset_gdefs.get(field_name, {}),
+            gdef,
             mode=self._device.read("operating_mode"),
             power_on=True,
             active_constraints=self._device.active_constraints(field_name),
+            field_states=interlock_states(self._device, gdef),
         ).offered
 
     @property

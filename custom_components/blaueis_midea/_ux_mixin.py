@@ -22,6 +22,20 @@ from __future__ import annotations
 from blaueis.core.gate_eval import evaluate_offered
 
 
+def interlock_states(device, gdef) -> dict | None:
+    """Build the {field: value} map a gate's interlocks depend on, or None.
+
+    Reads only the fields this gate's ``interlocks`` reference (usually 0), so the
+    cost is bounded per availability check. Values come from ``device.read`` (the
+    retained decoded value — hidden/excluded deps still resolve post-decode-retention)."""
+    deps = [
+        il.get("field")
+        for il in ((gdef or {}).get("gate") or {}).get("interlocks") or []
+        if il.get("field")
+    ]
+    return {d: device.read(d) for d in deps} if deps else None
+
+
 def field_ux_available(coordinator, field_name: str) -> bool:
     """Evaluate the field's offer gate for `field_name` against current state.
 
@@ -54,6 +68,7 @@ def field_ux_available(coordinator, field_name: str) -> bool:
         power_on=True,
         active_constraints=dev.active_constraints(field_name),
         caps=dev.caps_bitmap(),
+        field_states=interlock_states(dev, gdef),
     ).offered
 
 
