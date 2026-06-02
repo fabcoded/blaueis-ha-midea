@@ -68,6 +68,7 @@ def field_ux_available(coordinator, field_name: str) -> bool:
         power_on=True,
         active_constraints=dev.active_constraints(field_name),
         caps=dev.caps_bitmap(),
+        cap_values=dev.cap_values(),
         field_states=interlock_states(dev, gdef),
     ).offered
 
