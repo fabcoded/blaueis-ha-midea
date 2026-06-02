@@ -21,7 +21,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from blaueis.core.codec import walk_fields
-from blaueis.core.ux_gating import is_field_visible
+from blaueis.core.gate_eval import evaluate_offered
 
 from . import BlaueisMideaConfigEntry
 from ._preflight import validate_or_raise
@@ -282,11 +282,18 @@ class BlaueisMideaClimate(ClimateEntity):
 
     def _preset_visible(self, field_name: str) -> bool:
         """Whether a preset is selectable in the current operating mode
-        (heat-only Frost Protection is hidden in cool, etc.)."""
-        return is_field_visible(
+        (heat-only Frost Protection is hidden in cool, etc.).
+
+        ``power_on=True`` keeps the power axis off here — preset power-gating
+        already lives in ``preset_modes`` (none-only when off) — so this is parity
+        with the prior mode gate plus the now-live capability-mode axis (e.g. turbo
+        cap restricting which modes offer it)."""
+        return evaluate_offered(
             self._preset_gdefs.get(field_name, {}),
-            current_mode=self._device.read("operating_mode"),
-        )
+            mode=self._device.read("operating_mode"),
+            power_on=True,
+            active_constraints=self._device.active_constraints(field_name),
+        ).offered
 
     @property
     def preset_modes(self) -> list[str] | None:
