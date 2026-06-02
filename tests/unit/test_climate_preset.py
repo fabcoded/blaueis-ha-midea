@@ -29,6 +29,10 @@ def _entity(mode, active=None, power=True, set_result=None):
     coord.device.available_fields = {f: {} for f in PRESET_FIELDS}
     coord.device.glossary = load_glossary()
     coord.device.read = lambda name: reads.get(name)
+    # No B5 caps applied in this fixture → cap-mode axis inert (a real device
+    # returns None here, not a MagicMock). Without this, turbo_mode's gate.cap_mode
+    # would read the auto-mock as an empty mode set and gate it off everywhere.
+    coord.device.active_constraints = lambda name: None
     coord.device.set = AsyncMock(
         return_value=set_result or {"rejected": {}, "results": {}}
     )
