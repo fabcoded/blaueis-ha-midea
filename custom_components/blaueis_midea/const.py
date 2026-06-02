@@ -17,8 +17,13 @@ DEBUG_RING_SIZE_MB = 5
 # ── Climate preset fields ──────────────────────────────────
 # Mutually exclusive performance/comfort presets.
 # Setting one clears all others. B5-gated: only confirmed fields appear.
+# The "Turbo" preset drives strong_wind (body[8] bit 5) — the actionable
+# boost bit the device acts on — NOT turbo_mode (body[10] bit 1), which does
+# not engage on this hardware (the write read back as 0 → preset flip-back).
+# turbo_mode is kept hidden (CLIMATE_EXCLUSIVE_FIELDS) rather than exposed as a
+# dead standalone switch; it is still decoded/retained for gating.
 CLIMATE_PRESET_FIELDS = {
-    "turbo_mode": "Turbo",
+    "strong_wind": "Turbo",
     "eco_mode": "ECO",
     "sleep_mode": "Sleep",
     "frost_protection": "Frost Protection",
@@ -59,6 +64,9 @@ CLIMATE_EXCLUSIVE_FIELDS = frozenset({
     "louver_swing_angle_ud_enum",
     "louver_swing_angle_lr_enum",
     *CLIMATE_PRESET_FIELDS.keys(),
+    # turbo_mode no longer backs the Turbo preset (strong_wind does); keep it
+    # climate-exclusive so the dead bit isn't surfaced as a standalone switch.
+    "turbo_mode",
 })
 
 # ── Swing & vane-position model (climate.py) ───────────────
