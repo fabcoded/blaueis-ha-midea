@@ -94,6 +94,7 @@ immediately.
 ## Documentation
 
 - [docs/integration.md](docs/integration.md) — install, configure, entity model, debugging, reload-vs-restart.
+- [docs/feature_gating.md](docs/feature_gating.md) — how the offer gate surfaces in HA (the two offering sites); the model lives in the sibling repo.
 - [Flight recorder design](https://github.com/fabcoded/blaueis-libmidea/blob/main/docs/flight_recorder.md) (in sibling repo) — what the HA "Download Diagnostics" bundle contains.
 
 ## Debugging
