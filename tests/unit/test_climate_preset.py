@@ -19,8 +19,9 @@ PRESET_FIELDS = ["turbo_mode", "eco_mode", "sleep_mode", "frost_protection"]
 COOL, HEAT = 2, 4
 
 
-def _entity(mode, active=None, power=True, set_result=None):
-    """mode = operating_mode raw int; active = the preset field currently on."""
+def _entity(mode, active=None, power=True, set_result=None, cap_values=None):
+    """mode = operating_mode raw int; active = the preset field currently on.
+    cap_values = {cap_id: raw} for the gate mode-fork axis (default: none applied)."""
     reads = {"operating_mode": mode, "power": power}
     for f in PRESET_FIELDS:
         reads[f] = f == active
@@ -33,6 +34,7 @@ def _entity(mode, active=None, power=True, set_result=None):
     # returns None here, not a MagicMock). Without this, turbo_mode's gate.cap_mode
     # would read the auto-mock as an empty mode set and gate it off everywhere.
     coord.device.active_constraints = lambda name: None
+    coord.device.cap_values = lambda: (cap_values or {})
     coord.device.set = AsyncMock(
         return_value=set_result or {"rejected": {}, "results": {}}
     )
@@ -113,3 +115,25 @@ async def test_rejected_preset_resyncs_card():
     with pytest.raises(Exception):
         await ent.async_set_preset_mode("Frost Protection")
     ent.async_write_ha_state.assert_called_once()
+
+
+# ── G4: eco mode-fork live (special-eco cap → cool-only) ─────────────────
+AUTO, DRY = 1, 3
+
+
+def test_eco_offered_in_auto_without_caps():
+    # No caps → fork inert → eco offered per visible_in_modes (cool/auto/dry).
+    assert "ECO" in _entity(AUTO).preset_modes
+
+
+def test_eco_cool_only_with_special_eco_cap():
+    # Our unit: cap 0x12=1 (special eco) ⇒ eco offered in cool, hidden in auto/dry.
+    assert "ECO" in _entity(COOL, cap_values={"0x12": 1}).preset_modes
+    assert "ECO" not in _entity(AUTO, cap_values={"0x12": 1}).preset_modes
+    assert "ECO" not in _entity(DRY, cap_values={"0x12": 1}).preset_modes
+
+
+def test_eco_full_set_with_window_eco_cap():
+    # Window variant: cap 0x12=2 ⇒ eco keeps cool/auto/dry.
+    assert "ECO" in _entity(COOL, cap_values={"0x12": 2}).preset_modes
+    assert "ECO" in _entity(AUTO, cap_values={"0x12": 2}).preset_modes
