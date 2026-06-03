@@ -152,7 +152,7 @@ class TestHumanize:
     def test_field_preset_label(self):
         assert _humanize_field("frost_protection") == "Frost Protection"
         assert _humanize_field("eco_mode") == "ECO"
-        assert _humanize_field("turbo_mode") == "Turbo"
+        assert _humanize_field("strong_wind") == "Turbo"  # Turbo preset → strong_wind
         assert _humanize_field("sleep_mode") == "Sleep"
 
     def test_field_fallback(self):

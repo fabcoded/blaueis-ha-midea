@@ -4,7 +4,7 @@ a rejected/unapplied set re-syncs the card instead of leaving a stale pick.
 
 Real-glossary visible_in_modes anchoring these tests:
     frost_protection: [heat]            eco_mode:   [cool, auto, dry]
-    turbo_mode:       [cool, heat]      sleep_mode: [cool, heat, dry, auto]
+    strong_wind:      [cool, heat, fan_only]   sleep_mode: [cool, heat, dry, auto]
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -15,7 +15,7 @@ from blaueis.core.codec import load_glossary
 from custom_components.blaueis_midea.climate import BlaueisMideaClimate
 
 HOST, PORT = "127.0.0.1", 8765
-PRESET_FIELDS = ["turbo_mode", "eco_mode", "sleep_mode", "frost_protection"]
+PRESET_FIELDS = ["strong_wind", "eco_mode", "sleep_mode", "frost_protection"]
 COOL, HEAT = 2, 4
 
 
@@ -31,7 +31,7 @@ def _entity(mode, active=None, power=True, set_result=None, cap_values=None):
     coord.device.glossary = load_glossary()
     coord.device.read = lambda name: reads.get(name)
     # No B5 caps applied in this fixture → cap-mode axis inert (a real device
-    # returns None here, not a MagicMock). Without this, turbo_mode's gate.cap_mode
+    # returns None here, not a MagicMock). Without this, a field's gate.cap_mode
     # would read the auto-mock as an empty mode set and gate it off everywhere.
     coord.device.active_constraints = lambda name: None
     coord.device.cap_values = lambda: (cap_values or {})
@@ -84,7 +84,7 @@ def test_no_presets_offered_when_off():
 def test_active_preset_not_shown_when_off():
     # Even if a preset flag is still set, while off it's neither displayed nor
     # offered (it can't be engaged).
-    ent = _entity(COOL, active="turbo_mode", power=False)
+    ent = _entity(COOL, active="strong_wind", power=False)
     assert ent.preset_mode == "none"
     assert "Turbo" not in ent.preset_modes
 
@@ -95,7 +95,7 @@ async def test_set_preset_clears_others_and_sets_target():
     kwargs = ent._device.set.call_args.kwargs
     assert kwargs["frost_protection"] is True
     # mutual exclusion: the other mode-valid presets are cleared
-    assert kwargs["turbo_mode"] is False
+    assert kwargs["strong_wind"] is False
     assert kwargs["sleep_mode"] is False
     # eco is invalid in heat, so it isn't sent at all (would trip the mode gate)
     assert "eco_mode" not in kwargs
