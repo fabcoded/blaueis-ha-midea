@@ -64,6 +64,52 @@ def _mode_label(coord: BlaueisMideaCoordinator, token: str | None) -> str:
     return token.replace("_", " ").title()
 
 
+def _current_mode_label(coord: BlaueisMideaCoordinator) -> str:
+    """Label for the device's current operating mode (raw byte → token → label)."""
+    raw = coord.device.read("operating_mode")
+    if raw is None:
+        return "unknown"
+    if isinstance(raw, str):
+        return _mode_label(coord, raw)
+    op_def = coord.device.field_gdef("operating_mode") or {}
+    for token, vdef in (op_def.get("values") or {}).items():
+        if isinstance(vdef, dict) and vdef.get("raw") == raw:
+            return _mode_label(coord, token)
+    return str(raw)
+
+
+def _raise_gate_block(coord: BlaueisMideaCoordinator, field_name: str, blocked_by: list[str]) -> None:
+    """Translate an offer-gate ``blocked_by`` into a ServiceValidationError.
+
+    Mode / capability-mode blocks read as "not active in this mode"; an interlock
+    block names the conflicting feature. Same predicate as entity availability
+    (``field_gate_verdict``), so the error a write raises matches the greying.
+    """
+    label = _field_label(coord, field_name)
+    interlock = next((b for b in blocked_by if b.startswith("interlock:")), None)
+    mode_blocked = any(b == "mode" or b.startswith("cap_mode:") for b in blocked_by)
+
+    if interlock and not mode_blocked:
+        blocker_field = interlock.split(":", 1)[1]
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="field_blocked_by_feature",
+            translation_placeholders={
+                "field": label,
+                "blocker": _field_label(coord, blocker_field),
+            },
+        )
+    # mode / cap_mode (or any other axis) → wrong operating mode
+    raise ServiceValidationError(
+        translation_domain=DOMAIN,
+        translation_key="field_inactive_in_mode",
+        translation_placeholders={
+            "field": label,
+            "mode": _current_mode_label(coord),
+        },
+    )
+
+
 def validate_or_raise(
     coord: BlaueisMideaCoordinator,
     field_name: str,
@@ -71,12 +117,20 @@ def validate_or_raise(
 ) -> None:
     """Run the validator; raise ``ServiceValidationError`` on non-Ok.
 
-    The validator's outcome shape maps onto translation keys declared in
-    ``translations/<lang>.json``:
+    Two layers, both raising ``ServiceValidationError`` with a translation key:
 
-    - :class:`OutOfRange`    → ``value_out_of_range``
-    - :class:`NotInEnum`     → ``value_not_in_enum``
-    - :class:`ModeDisallowed`→ ``field_inactive_in_mode``
+    1. **Offer gate** (``field_gate_verdict`` — the same predicate that drives
+       entity availability): blocks a write the field isn't offered for right now.
+       - mode / capability-mode → ``field_inactive_in_mode``
+       - runtime interlock      → ``field_blocked_by_feature``
+       Running this first means the *write rejection* a user gets always matches
+       the *greying* they see, and a service call / automation can't slip a write
+       past an interlock or capability-mode restriction (which the lib mode-fence
+       alone would not catch).
+    2. **Value validator** (``validate_set``):
+       - :class:`OutOfRange`    → ``value_out_of_range``
+       - :class:`NotInEnum`     → ``value_not_in_enum``
+       - :class:`ModeDisallowed`→ ``field_inactive_in_mode``
 
     :class:`FieldUnknown` is silently passed through — service handlers
     only call this for fields they own (entity → field_name binding is
@@ -85,6 +139,15 @@ def validate_or_raise(
 
     Booleans are not range-checked (handled inside the validator).
     """
+    # Lazy import: _ux_mixin pulls the vendored gate evaluator; importing it at
+    # module level here loads that chain too early during test collection and trips
+    # the select.py / stdlib-select shadow. At call time everything is loaded.
+    from ._ux_mixin import field_gate_verdict
+
+    verdict = field_gate_verdict(coord, field_name)
+    if not verdict.offered:
+        _raise_gate_block(coord, field_name, verdict.blocked_by)
+
     outcome = validate_set(
         field_name, value, coord.device.status, coord.device.glossary
     )
