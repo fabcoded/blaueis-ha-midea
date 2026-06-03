@@ -382,20 +382,30 @@ class BlaueisMideaClimate(ClimateEntity):
         for field_name in self._available_presets:
             if self._preset_visible(field_name):
                 changes[field_name] = False
+        target_field: str | None = None
         if preset_mode != PRESET_NONE:
             target_field = PRESET_NAME_TO_FIELD.get(preset_mode)
             if target_field and target_field in self._available_presets:
                 changes[target_field] = True
                 primary.add(target_field)
-        if changes:
+        if not changes:
+            return
+        try:
+            # Pre-flight the target preset through the same offer gate as field
+            # writes, so a mode / capability-mode / interlock block raises a clear
+            # ServiceValidationError *before* sending — instead of a post-send
+            # rejection. The card already hides un-offered presets; this catches
+            # service-call / automation picks. Clearing the siblings (=off) is
+            # always allowed, so only the target is validated.
+            if target_field:
+                validate_or_raise(self._coord, target_field, True)
             result = await self._device.set(**changes)
-            try:
-                check_set_result(result, primary_fields=primary)
-            finally:
-                # Re-push the real state so a rejected / unapplied preset
-                # reverts in the card to the actually-active one instead of
-                # leaving the attempted selection shown.
-                self.async_write_ha_state()
+            check_set_result(result, primary_fields=primary)
+        finally:
+            # Re-push the real state so a rejected / unapplied preset reverts in
+            # the card to the actually-active one instead of leaving the
+            # attempted selection shown.
+            self.async_write_ha_state()
 
     async def async_turn_on(self) -> None:
         result = await self._device.set(power=True)
