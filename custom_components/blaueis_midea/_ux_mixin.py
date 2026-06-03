@@ -19,7 +19,7 @@ Keeps the pattern out of each class body so adding a new platform
 
 from __future__ import annotations
 
-from blaueis.core.gate_eval import evaluate_offered
+from blaueis.core.gate_eval import GateVerdict, evaluate_offered
 
 
 def interlock_states(device, gdef) -> dict | None:
@@ -60,6 +60,21 @@ def field_ux_available(coordinator, field_name: str) -> bool:
         return False
     if not coordinator.device_fresh:
         return False
+    return field_gate_verdict(coordinator, field_name).offered
+
+
+def field_gate_verdict(coordinator, field_name: str) -> GateVerdict:
+    """Evaluate the full offer gate for `field_name` and return the verdict.
+
+    Single source of the gate predicate — used both by ``field_ux_available``
+    (which only needs ``.offered``) and by the write pre-flight
+    (``_preflight.validate_or_raise``, which surfaces ``.blocked_by`` as a
+    user-facing error). Keeping one call site guarantees the *availability* the
+    user sees and the *write rejection* they'd get can never disagree.
+
+    ``power_on=True`` keeps the power axis inert here, matching the offering
+    sites (power-state fading is handled by ``device_fresh`` / preset gating).
+    """
     dev = coordinator.device
     gdef = dev.field_gdef(field_name)
     return evaluate_offered(
@@ -70,7 +85,7 @@ def field_ux_available(coordinator, field_name: str) -> bool:
         caps=dev.caps_bitmap(),
         cap_values=dev.cap_values(),
         field_states=interlock_states(dev, gdef),
-    ).offered
+    )
 
 
 def field_writable_in_current_mode(coordinator, field_name: str) -> bool:

@@ -115,6 +115,9 @@
     },
     "field_inactive_in_mode": {
       "message": "{field} cannot be set while operating mode is {mode}."
+    },
+    "field_blocked_by_feature": {
+      "message": "{field} cannot be set while {blocker} is active."
     }
   }
 }
