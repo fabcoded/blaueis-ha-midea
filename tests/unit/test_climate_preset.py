@@ -11,12 +11,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from blaueis.core.codec import load_glossary
+from homeassistant.exceptions import ServiceValidationError
+
+from blaueis.core.codec import load_glossary, walk_fields
 from custom_components.blaueis_midea.climate import BlaueisMideaClimate
 
 HOST, PORT = "127.0.0.1", 8765
 PRESET_FIELDS = ["strong_wind", "eco_mode", "sleep_mode", "frost_protection"]
 COOL, HEAT = 2, 4
+_FIELDS = walk_fields(load_glossary())
 
 
 def _entity(mode, active=None, power=True, set_result=None, cap_values=None):
@@ -27,9 +30,12 @@ def _entity(mode, active=None, power=True, set_result=None, cap_values=None):
         reads[f] = f == active
     coord = MagicMock()
     coord.host, coord.port = HOST, PORT
+    coord.hass.config.language = "en"
     coord.device.available_fields = {f: {} for f in PRESET_FIELDS}
     coord.device.glossary = load_glossary()
     coord.device.read = lambda name: reads.get(name)
+    coord.device.field_gdef = lambda n: _FIELDS.get(n)
+    coord.device.caps_bitmap = lambda: {}
     # No B5 caps applied in this fixture → cap-mode axis inert (a real device
     # returns None here, not a MagicMock). Without this, a field's gate.cap_mode
     # would read the auto-mock as an empty mode set and gate it off everywhere.
@@ -101,19 +107,30 @@ async def test_set_preset_clears_others_and_sets_target():
     assert "eco_mode" not in kwargs
 
 
-async def test_rejected_preset_resyncs_card():
-    # A device-layer rejection raises, but the finally must still re-push state
-    # so the card reverts to the real (none) selection instead of the pick.
+async def test_preset_blocked_preflight_raises_validation_error():
+    # Picking a preset not offered in the current mode (e.g. via a service call —
+    # the card already hides it) raises a reasoned ServiceValidationError BEFORE
+    # any write, and still resyncs the card.
+    ent = _entity(COOL)  # Frost Protection is heat-only
+    ent.async_write_ha_state = MagicMock()
+    with pytest.raises(ServiceValidationError) as exc:
+        await ent.async_set_preset_mode("Frost Protection")
+    assert exc.value.translation_key == "field_inactive_in_mode"
+    ent._device.set.assert_not_awaited()  # blocked before sending
+    ent.async_write_ha_state.assert_called_once()
+
+
+async def test_offered_preset_device_rejection_resyncs():
+    # An OFFERED preset the gate lets through but the device still rejects
+    # post-send: it raises, the write WAS sent, and the finally re-pushes state.
     ent = _entity(
-        COOL,
-        set_result={
-            "rejected": {"frost_protection": "requires mode [4], current=2"},
-            "results": {},
-        },
+        HEAT,  # Frost is offered in heat → gate passes
+        set_result={"rejected": {"frost_protection": "device busy"}, "results": {}},
     )
     ent.async_write_ha_state = MagicMock()
     with pytest.raises(Exception):
         await ent.async_set_preset_mode("Frost Protection")
+    ent._device.set.assert_awaited_once()  # gate passed → write sent
     ent.async_write_ha_state.assert_called_once()
 
 
