@@ -48,10 +48,8 @@ import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.storage import Store
 
-from blaueis.core.codec import (
-    build_frame_from_spec,
-    walk_fields,
-)
+from blaueis.core.codec import walk_fields
+from blaueis.core.scan_queries import build_scan_queries
 from blaueis.core.inventory import (
     CLASS_POPULATED,
     ShadowDecoder,
@@ -117,73 +115,15 @@ def _store_for_entry(
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#   Query list builder (unchanged from prior implementation)
+#   Query list builder
 # ══════════════════════════════════════════════════════════════════════════
 
 
 def _build_scan_query_list(glossary: dict) -> list[tuple[str, bytes]]:
-    """Build the superset of read-query frames to inject during a scan.
-
-    Pulls the same set ``ac_probe.py`` uses: B5 simple + extended, C0
-    status, C1 group pages, B1 property batches derived from the
-    glossary, msg_type 0x07 device ID, and a handful of exploratory
-    optCommand / C1-sub-page queries.
-    """
-    queries: list[tuple[str, bytes]] = []
-    for fid in (
-        "cmd_0xb5_extended",
-        "cmd_0xb5_simple",
-        "cmd_0x41",
-        "cmd_0x41_group4_power",
-        "cmd_0x41_group5",
-        "cmd_0x41_ext",
-    ):
-        try:
-            frame = build_frame_from_spec(glossary, fid, values={})
-        except Exception as e:
-            _LOGGER.debug("field_inventory: skip query %s — %s", fid, e)
-            continue
-        if frame:
-            queries.append((fid, frame))
-
-    for sp in (0x01, 0x02):
-        try:
-            frame = build_frame_from_spec(
-                glossary, "cmd_0x41_direct_subpage", values={"subpage": sp}
-            )
-            if frame:
-                queries.append((f"direct_subpage_0x{sp:02X}", frame))
-        except Exception as e:
-            _LOGGER.debug("field_inventory: skip subpage 0x%02X — %s", sp, e)
-
-    try:
-        frame = build_frame_from_spec(glossary, "cmd_0x07_device_id", values={})
-        if frame:
-            queries.append(("msg_type_0x07", frame))
-    except Exception as e:
-        _LOGGER.debug("field_inventory: skip 0x07 — %s", e)
-
-    for opt in (0x00, 0x02, 0x04, 0x05, 0x06):
-        try:
-            frame = build_frame_from_spec(
-                glossary, "cmd_0xa1_optcommand", values={"opt": opt}
-            )
-            if frame:
-                queries.append((f"optcommand_0x{opt:02X}", frame))
-        except Exception:
-            pass
-
-    for group in (0x42, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F):
-        try:
-            frame = build_frame_from_spec(
-                glossary, "cmd_0x41_group_raw", values={"group": group}
-            )
-            if frame:
-                queries.append((f"c1_group_0x{group:02X}", frame))
-        except Exception:
-            pass
-
-    return queries
+    """The (label, frame_bytes) list to inject during a scan — the
+    canonical list from :mod:`blaueis.core.scan_queries`, shared with the
+    CLI probe/inventory tools so coverage cannot drift between them."""
+    return build_scan_queries(glossary)
 
 
 # ══════════════════════════════════════════════════════════════════════════
