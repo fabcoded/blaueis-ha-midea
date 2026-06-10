@@ -9,7 +9,8 @@
   "requirements": [
     "websockets>=12.0",
     "pyyaml>=6.0",
-    "cryptography>=41.0"
+    "cryptography>=41.0",
+    "jsonschema>=4.0"
   ],
   "version": "0.1.0"
 }

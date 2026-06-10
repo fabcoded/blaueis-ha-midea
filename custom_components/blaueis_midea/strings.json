@@ -34,7 +34,8 @@
           "display_buzzer_mode": "Display & Buzzer mode",
           "glossary_overrides_yaml": "Advanced — Glossary overrides (YAML)",
           "run_inventory_scan_now": "Run new inventory scan on submit",
-          "latest_field_inventory_display": "Latest field inventory report"
+          "latest_field_inventory_display": "Latest field inventory report",
+          "override_parse_status_display": "Override parse status"
         },
         "data_description": {
           "follow_me_function_configured": "Master availability flag. Tick once you've selected a temperature sensor and reviewed the guards below. While unticked, the on/off switch is hidden from the device card. Unticking force-clears Enabled so the persisted state stays consistent.",
@@ -46,7 +47,8 @@
           "display_buzzer_mode": "Controls the AC display LED and, by extension, the buzzer. Non-enforced lets you control the display freely; Forced modes keep the display in the selected state and the integration re-asserts it if the remote changes it.",
           "glossary_overrides_yaml": "Developer / debugging only — leave empty for normal operation. See the integration README for the override format and examples.",
           "run_inventory_scan_now": "Tick and save to trigger a fresh field-inventory scan. Takes ~10-15 s; reopen Configure afterwards to see the result below. Each scan replaces the single cached entry — no history accumulates.",
-          "latest_field_inventory_display": "Read-only preview of the latest scan. Includes a human-readable timestamp comment at the top. Cached on disk and rehydrated after HA restart — re-running a scan replaces this single entry. Select + copy to share."
+          "latest_field_inventory_display": "Read-only preview of the latest scan. Includes a human-readable timestamp comment at the top. Cached on disk and rehydrated after HA restart — re-running a scan replaces this single entry. Select + copy to share.",
+          "override_parse_status_display": "Read-only result of parsing the stored override above. Empty when no override is configured. 'parse ok' = applied with no caveats. 'parse with warning (check log)' = applied but emitted exclusion-gating notes for fields whose decoder or write path is unverified — see Settings → System → Logs. 'parse failed (check log)' = stored YAML did not validate; the integration ignores the override at runtime."
         }
       }
     },
@@ -102,6 +104,20 @@
           }
         }
       }
+    }
+  },
+  "exceptions": {
+    "value_out_of_range": {
+      "message": "{got} is outside the allowed range [{min}, {max}] for {field}."
+    },
+    "value_not_in_enum": {
+      "message": "{got} is not one of the allowed values for {field} (allowed: {allowed})."
+    },
+    "field_inactive_in_mode": {
+      "message": "{field} cannot be set while operating mode is {mode}."
+    },
+    "field_blocked_by_feature": {
+      "message": "{field} cannot be set while {blocker} is active."
     }
   }
 }

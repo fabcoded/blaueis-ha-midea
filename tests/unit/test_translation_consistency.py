@@ -33,6 +33,7 @@ PREFLIGHT_KEYS = {
     "value_out_of_range": {"got", "min", "max", "field"},
     "value_not_in_enum": {"got", "allowed", "field"},
     "field_inactive_in_mode": {"field", "mode"},
+    "field_blocked_by_feature": {"field", "blocker"},
 }
 
 PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
@@ -42,7 +43,9 @@ PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
 
 def _all_lang_files() -> list[Path]:
-    return sorted(TRANSLATIONS_DIR.glob("*.json"))
+    # strings.json is the source-of-truth copy HA tooling reads; keep it
+    # under the same parity checks as the shipped language files.
+    return [INTEGRATION_ROOT / "strings.json", *sorted(TRANSLATIONS_DIR.glob("*.json"))]
 
 
 @pytest.mark.parametrize("lang_file", _all_lang_files(), ids=lambda p: p.stem)

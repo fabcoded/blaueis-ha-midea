@@ -7,6 +7,7 @@ confirmed features become entities.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 from pathlib import Path
@@ -19,6 +20,8 @@ if _LIB not in sys.path:
 from homeassistant.config_entries import ConfigEntry  # noqa: E402
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform  # noqa: E402
 from homeassistant.core import HomeAssistant  # noqa: E402
+from homeassistant.exceptions import ConfigEntryNotReady  # noqa: E402
+from websockets.exceptions import WebSocketException  # noqa: E402
 
 from ._glossary_override import (  # noqa: E402
     GlossaryOverrideError,
@@ -133,7 +136,16 @@ async def async_setup_entry(
     coordinator._applied_override_yaml = (
         entry.options.get(CONF_GLOSSARY_OVERRIDES, "") or ""
     )
-    await coordinator.async_start()
+    try:
+        await coordinator.async_start()
+    except (TimeoutError, OSError, WebSocketException) as err:
+        # Gateway down/unreachable at setup time is transient — let HA
+        # retry with backoff instead of failing the entry permanently.
+        with contextlib.suppress(Exception):
+            await coordinator.device.stop()
+        raise ConfigEntryNotReady(
+            f"Cannot reach Blaueis gateway at {host}:{port}: {err}"
+        ) from err
 
     entry.runtime_data = coordinator
 

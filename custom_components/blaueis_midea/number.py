@@ -43,7 +43,9 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BlaueisMideaConfigEntry
+from ._preflight import validate_or_raise
 from ._set_result import check_set_result
+from ._ux_mixin import field_ux_available
 from .coordinator import BlaueisMideaCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -155,9 +157,10 @@ class BlaueisMideaSlider(NumberEntity):
 
     @property
     def available(self) -> bool:
-        if not self._coord.connected:
-            return False
-        if not self._coord.device_fresh:
+        # Same offer gate as the switch/select siblings (connected +
+        # fresh + gate evaluator) so a gated/interlocked field's slider
+        # greys out together with them.
+        if not field_ux_available(self._coord, self._field_name):
             return False
         power = self._coord.device.read("power")
         return bool(power)
@@ -182,6 +185,9 @@ class BlaueisMideaSlider(NumberEntity):
         return float(raw)
 
     async def async_set_native_value(self, value: float) -> None:
+        # UI-only rounding: slider-range clamp + snap to the presented
+        # grid. Authority on what the unit accepts stays with the
+        # preflight below and the lib's constraint gate on the write path.
         n = int(round(value))
         lo = int(self._attr_native_min_value)
         hi = int(self._attr_native_max_value)
@@ -189,8 +195,7 @@ class BlaueisMideaSlider(NumberEntity):
 
         if self._mode == "snap_nearest" and self._snap_set:
             n = min(self._snap_set, key=lambda x: abs(x - n))
-        # "clamp" already covered above; "reject" not applied at slider level
-        # (the slider UI doesn't present out-of-range values, so we don't raise)
 
+        validate_or_raise(self._coord, self._field_name, n)
         result = await self._device.set(**{self._field_name: n})
         check_set_result(result, primary_fields={self._field_name})
