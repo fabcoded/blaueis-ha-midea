@@ -32,6 +32,7 @@ evaluate_offered(
     active_constraints=device.active_constraints(field_name),
     field_states=interlock_states(device, gdef),   # only the gate's interlock deps
     caps=device.caps_bitmap(),
+    cap_values=device.cap_values(),
 )
 ```
 
@@ -43,8 +44,8 @@ evaluate_offered(
   decoded value even for hidden/excluded dependencies (see the library's
   decode-retention section).
 - **`caps`** — the B5 flag bitmap for `ux.hardware_flag`.
-- **`cap_values`** *(pending — eco-variant increment)* — `device.cap_values()` will be
-  passed once the `mode_forks` axis lands, after a live engagement test.
+- **`cap_values`** — `{cap_id: raw}` of the unit's B5 caps, consumed by the
+  `mode_forks` axis (live since the eco increment, validated by live engagement test).
 
 ## 3. Why `power_on=True`
 

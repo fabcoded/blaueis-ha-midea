@@ -71,7 +71,7 @@ On save, the integration:
 1. Parses the YAML. Parse errors → form rejected with **line and
    column** of the error.
 2. Strips the protected `meta` block silently (with a warning surfaced
-   in the post-save confirmation).
+   in the in-form parse-status field and the post-save log summary).
 3. Deep-merges the override into the base glossary.
 4. Validates the merged result against `glossary_schema.json`. Any
    schema violation introduced by the override → form rejected with
@@ -105,9 +105,10 @@ with audit metadata blocks the schema doesn't yet describe) are
 
 Three options:
 
-1. **Confirmation step.** When you save a non-trivial override, the
-   form transitions to a confirmation step listing the affected leaf
-   paths and any warnings (e.g. meta-strip).
+1. **In-form parse status.** The options form shows a read-only
+   *Override parse status* field below the textarea reporting the parse
+   result, affected leaf paths, and warnings (e.g. meta-strip) for the
+   current text; on save the same summary is written to the HA log.
 2. **Diagnostics.** *Settings → Devices & Services → Blaueis Midea AC
    → \[device\] → Download Diagnostics* includes a `glossary_override`
    block with the raw YAML, the affected paths, and a summary of

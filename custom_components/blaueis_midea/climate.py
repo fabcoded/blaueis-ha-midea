@@ -295,6 +295,7 @@ class BlaueisMideaClimate(ClimateEntity):
             mode=self._device.read("operating_mode"),
             power_on=True,
             active_constraints=self._device.active_constraints(field_name),
+            caps=self._device.caps_bitmap(),
             cap_values=self._device.cap_values(),
             field_states=interlock_states(self._device, gdef),
         ).offered

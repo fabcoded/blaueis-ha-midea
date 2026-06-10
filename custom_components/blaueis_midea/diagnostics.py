@@ -100,8 +100,8 @@ def _glossary_override_section(
 
     The full merged glossary is intentionally NOT included by default —
     it's a few hundred KB and is mostly identical to the un-overridden
-    base. Use the in-app "View merged glossary" menu (G9) for a scoped
-    on-screen view, or run the override locally to reconstruct it.
+    base. An in-app merged-glossary view (G9) is future work; until then,
+    re-apply the override locally to reconstruct the merged result.
     """
     yaml_text = entry.options.get(CONF_GLOSSARY_OVERRIDES, "") or ""
     affected = list(getattr(coordinator.device, "glossary_override_affected", []))
