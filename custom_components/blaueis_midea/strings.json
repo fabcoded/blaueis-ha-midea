@@ -9,14 +9,23 @@
           "port": "[%key:common::config_flow::data::port%]",
           "psk": "Pre-shared key (passphrase)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Blaueis Gateway",
+        "description": "The gateway at {host}:{port} rejected the stored pre-shared key. Enter the gateway's current PSK.",
+        "data": {
+          "psk": "Pre-shared key (passphrase)"
+        }
       }
     },
     "error": {
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]"
     }
   },
   "options": {

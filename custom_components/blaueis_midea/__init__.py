@@ -20,7 +20,10 @@ if _LIB not in sys.path:
 from homeassistant.config_entries import ConfigEntry  # noqa: E402
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform  # noqa: E402
 from homeassistant.core import HomeAssistant  # noqa: E402
-from homeassistant.exceptions import ConfigEntryNotReady  # noqa: E402
+from homeassistant.exceptions import (  # noqa: E402
+    ConfigEntryAuthFailed,
+    ConfigEntryNotReady,
+)
 from websockets.exceptions import WebSocketException  # noqa: E402
 
 from ._glossary_override import (  # noqa: E402
@@ -108,8 +111,14 @@ async def async_setup_entry(
 
     # Pre-load glossary in executor to avoid blocking the event loop
     from blaueis.core.codec import load_glossary
+    from blaueis.core.crypto import AuthenticationError, HandshakeError, psk_to_bytes
 
     await hass.async_add_executor_job(load_glossary)
+
+    # Stretch the PSK once, off the event loop — psk_to_bytes is
+    # scrypt-based since protocol v2 (~100 ms CPU, 16 MiB). Device
+    # accepts the pre-derived bytes and skips its own derivation.
+    psk = await hass.async_add_executor_job(psk_to_bytes, psk) if psk else psk
 
     _migrate_renamed_unique_ids(hass, entry)
     _migrate_display_buzzer_options(hass, entry)
@@ -136,11 +145,39 @@ async def async_setup_entry(
     coordinator._applied_override_yaml = (
         entry.options.get(CONF_GLOSSARY_OVERRIDES, "") or ""
     )
+
+    # Runtime auth failure (gateway PSK rotated while we were connected):
+    # the Device stops its reconnect loop and fires this hook exactly
+    # once — surface a reauth flow so the user is asked for the new key
+    # instead of silent retry noise. Only fires on a cryptographically
+    # confirmed mismatch; transient handshake failures keep retrying.
+    def _on_auth_failed(reason: str) -> None:
+        _LOGGER.error(
+            "Gateway %s:%d rejected our credentials (%s) — starting reauth",
+            host,
+            port,
+            reason,
+        )
+        entry.async_start_reauth(hass)
+
+    coordinator.on_auth_failed = _on_auth_failed
+
     try:
         await coordinator.async_start()
-    except (TimeoutError, OSError, WebSocketException) as err:
+    except AuthenticationError as err:
+        # Confirmed credential problem (key confirmation failed) —
+        # retrying can't fix it. ConfigEntryAuthFailed makes HA start
+        # the reauth flow.
+        with contextlib.suppress(Exception):
+            await coordinator.device.stop()
+        raise ConfigEntryAuthFailed(
+            f"Blaueis gateway at {host}:{port} rejected our credentials: {err}"
+        ) from err
+    except (HandshakeError, TimeoutError, OSError, WebSocketException) as err:
         # Gateway down/unreachable at setup time is transient — let HA
         # retry with backoff instead of failing the entry permanently.
+        # Plain HandshakeError belongs here too: slot pool full or a
+        # malformed reply, not a credential problem.
         with contextlib.suppress(Exception):
             await coordinator.device.stop()
         raise ConfigEntryNotReady(

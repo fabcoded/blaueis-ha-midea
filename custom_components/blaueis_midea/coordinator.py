@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -35,7 +36,7 @@ class BlaueisMideaCoordinator:
         hass: HomeAssistant,
         host: str,
         port: int,
-        psk: str,
+        psk: str | bytes,
         debug_ring=None,
         glossary_overrides: dict | None = None,
     ) -> None:
@@ -52,6 +53,9 @@ class BlaueisMideaCoordinator:
             glossary_overrides=glossary_overrides,
         )
         self._entity_callbacks: dict[str, set] = {}  # field_name → {callback, ...}
+        # Set by __init__.async_setup_entry — called (once) when the
+        # Device's reconnect loop hits a credential error and stops.
+        self.on_auth_failed: Callable[[str], None] | None = None
         # Ingress hooks — subscribers called on every device-state update.
         # See _ingress_hook.py for the protocol. Registration typically
         # happens in the owning entity's async_added_to_hass.
@@ -117,6 +121,7 @@ class BlaueisMideaCoordinator:
         self.device.on_connected = self._on_connected
         self.device.on_disconnected = self._on_disconnected
         self.device.on_gateway_stats = self._on_gateway_stats
+        self.device.on_auth_failed = self._on_auth_failed
         await self.device.start()
         self._connected = True
 
@@ -335,6 +340,18 @@ class BlaueisMideaCoordinator:
     def _on_disconnected(self) -> None:
         self._connected = False
         _LOGGER.warning("Gateway disconnected: %s:%d", self.host, self.port)
+
+    def _on_auth_failed(self, reason: str) -> None:
+        """Device reconnect hit a credential error (PSK mismatch /
+        protocol-version refusal) and stopped retrying. Forward to the
+        integration so it can start a reauth flow."""
+        self._connected = False
+        _LOGGER.error("Gateway auth failed: %s:%d — %s", self.host, self.port, reason)
+        if self.on_auth_failed is not None:
+            try:
+                self.on_auth_failed(reason)
+            except Exception:
+                _LOGGER.exception("on_auth_failed hook error")
 
     # ── Entity discovery ────────────────────────────────────
 

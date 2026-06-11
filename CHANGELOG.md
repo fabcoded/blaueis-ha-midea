@@ -4,7 +4,29 @@ Notable changes to the Blaueis Midea integration.
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING: session protocol v2.** The vendored library now speaks
+  protocol v2 (direction-separated encryption keys and nonces, scrypt
+  PSK stretching, key confirmation during connect, gateway pre-auth
+  connection cap). A v2 integration cannot talk to a v1 gateway —
+  update the gateway and the integration together.
+
+### Added
+- **Reauthentication flow.** A wrong PSK is now detected during the
+  config flow and at startup (key confirmation) and surfaces as
+  "invalid authentication" instead of a connection error. If the
+  gateway starts rejecting the stored key at runtime (key rotated),
+  HA prompts for the new PSK instead of retrying forever. Only a
+  cryptographically confirmed mismatch triggers this — transient
+  handshake failures (gateway connection pool full, version-mismatch
+  close) stay ordinary connection errors and keep retrying.
+
 ### Fixed
+- **Wrong PSK no longer passes validation.** Previously the handshake
+  carried no key confirmation, so entry setup succeeded with a wrong
+  key and every later message failed to decrypt in a silent retry
+  loop. Validation now fails fast, and a credential failure during
+  reconnect stops the retry loop and asks for reauthentication.
 - **Climate presets are now power- and mode-aware.** While the unit is off no
   presets are offered (they can't engage), and a preset invalid in the current
   operating mode (e.g. Frost Protection in cool) is no longer offered either —

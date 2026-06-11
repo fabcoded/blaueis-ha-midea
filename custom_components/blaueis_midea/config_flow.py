@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -60,18 +62,35 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     except (OSError, asyncio.TimeoutError) as err:
         raise CannotConnect from err
 
-    # Test WebSocket + encryption handshake
+    # Test WebSocket + encryption handshake. connect() performs key
+    # confirmation (protocol v2): a wrong PSK raises AuthenticationError
+    # here instead of surfacing later as decrypt failures in the listen
+    # loop. Plain HandshakeError (slot pool full, malformed reply) is a
+    # transient condition and maps to CannotConnect like any other
+    # connection problem. connect() closes its socket on failure; the
+    # finally-close covers the success path.
+    from blaueis.core.crypto import AuthenticationError
+
+    client = None
     try:
         from blaueis.client.ws_client import HvacClient
         from blaueis.core.crypto import psk_to_bytes
 
-        psk_bytes = psk_to_bytes(psk)
+        # psk_to_bytes is scrypt-based (v2) — ~100 ms of CPU; keep it
+        # off the event loop.
+        psk_bytes = await hass.async_add_executor_job(psk_to_bytes, psk)
         client = HvacClient(host, port, psk=psk_bytes)
         await client.connect()
-        await client.close()
+    except AuthenticationError as err:
+        _LOGGER.debug("Gateway rejected our PSK: %s", err)
+        raise InvalidAuth from err
     except Exception as err:
         _LOGGER.debug("WebSocket handshake failed: %s", err)
         raise CannotConnect from err
+    finally:
+        if client is not None:
+            with contextlib.suppress(Exception):
+                await client.close()
 
     return {"title": f"Blaueis AC ({host})"}
 
@@ -105,12 +124,58 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=info["title"], data=user_input)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
             except Exception:
                 _LOGGER.exception("Unexpected exception during setup")
                 errors["base"] = "unknown"
 
         return self.async_show_form(
             step_id="user", data_schema=DATA_SCHEMA, errors=errors
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> config_entries.ConfigFlowResult:
+        """Gateway started rejecting our PSK (or protocol version)."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Ask for the current PSK and re-validate against the stored gateway."""
+        # context["entry_id"] keeps us on the documented HA 2024.10 floor
+        # (the _get_reauth_entry helper only landed in 2024.11).
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        assert entry is not None
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            data = {**entry.data, CONF_PSK: user_input[CONF_PSK]}
+            try:
+                await validate_input(self.hass, data)
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except Exception:
+                _LOGGER.exception("Unexpected exception during reauth")
+                errors["base"] = "unknown"
+            else:
+                # data= (not data_updates=) — the latter only exists from
+                # HA 2024.11, and the documented floor is 2024.10. The
+                # merged dict is the same either way; the default abort
+                # reason is reauth_successful and the entry reloads.
+                return self.async_update_reload_and_abort(entry, data=data)
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PSK): str}),
+            errors=errors,
+            description_placeholders={
+                "host": str(entry.data[CONF_HOST]),
+                "port": str(entry.data[CONF_PORT]),
+            },
         )
 
 
@@ -490,3 +555,7 @@ def _build_latest_inventory_display(coord) -> str:
 
 class CannotConnect(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
+
+
+class InvalidAuth(exceptions.HomeAssistantError):
+    """Error to indicate the gateway rejected our PSK."""

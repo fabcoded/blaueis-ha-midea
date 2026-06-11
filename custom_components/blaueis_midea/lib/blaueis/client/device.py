@@ -34,7 +34,7 @@ from blaueis.core.codec import (
     identify_frame,
     load_glossary,
 )
-from blaueis.core.crypto import psk_to_bytes
+from blaueis.core.crypto import AuthenticationError, psk_to_bytes
 from blaueis.core.frame import (
     build_cap_query_extended,
     build_cap_query_simple,
@@ -172,6 +172,14 @@ class Device:
         self.on_connected: Callable[[], None] | None = None
         self.on_disconnected: Callable[[], None] | None = None
         self.on_gateway_stats: Callable[[dict], None] | None = None
+        # Fired (once) when a reconnect fails with an AuthenticationError
+        # — a cryptographically confirmed PSK mismatch. The reconnect
+        # loop STOPS — retrying a wrong key forever is noise; the
+        # consumer should surface a reauth to the user and call start()
+        # again after fixing. Transient handshake failures (slot pool
+        # full, malformed reply, version-refusal close) keep the
+        # ordinary retry-forever behaviour.
+        self.on_auth_failed: Callable[[str], None] | None = None
 
         # ── Frame observers ────────────────────────────────
         # Low-level hook surface: each observer is called synchronously
@@ -611,6 +619,17 @@ class Device:
                 if self._post_connect_task and not self._post_connect_task.done():
                     self._post_connect_task.cancel()
                 self._post_connect_task = asyncio.create_task(self._post_connect_init())
+                return
+            except AuthenticationError as e:
+                # Confirmed credential problem (key confirmation failed)
+                # — endless retry can't fix it. Stop and tell the
+                # consumer so it can ask the user to reauthorize. Plain
+                # HandshakeError (pool full, malformed reply) falls to
+                # the generic handler below and keeps retrying.
+                log.error("Reconnect auth failure, stopping retries: %s", e)
+                self._running = False
+                if self.on_auth_failed:
+                    self.on_auth_failed(str(e))
                 return
             except Exception as e:
                 log.warning("Reconnect attempt %d failed: %s", attempt, e)

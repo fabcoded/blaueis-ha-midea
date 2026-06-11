@@ -201,7 +201,7 @@ Restart HA (`ha core restart` — manifest + Python files are picked up at start
    - **Host** — gateway IP or mDNS hostname (e.g. `gateway.local`).
    - **Port** — default `8765`.
    - **PSK** — the gateway's shared key (from `/etc/blaueis-gw/instances/<name>.yaml:psk`).
-3. The config flow tests TCP + the full crypto handshake before accepting. Failure → `cannot_connect`; check the gateway is running and the PSK matches.
+3. The config flow tests TCP + the full crypto handshake (including key confirmation) before accepting. Unreachable gateway, full connection pool, or a protocol-version mismatch (gateway and integration updated separately — the gateway closes during the handshake) → `cannot_connect`; wrong PSK → `invalid_auth`. If the gateway later starts rejecting the stored key (key rotated), the integration stops reconnecting and HA prompts for re-authentication — enter the new PSK there.
 
 One config entry per gateway instance. Multiple ACs → multiple gateway instances → multiple config entries, all sharing `host`:`port` is rejected (deduped by `(host, port)`).
 
@@ -357,11 +357,13 @@ come back and interrupts every other integration.
 
 ## 7. Troubleshooting
 
-### 7.1 `cannot_connect` on config flow
+### 7.1 `cannot_connect` / `invalid_auth` on config flow
 
-- Gateway not running: `ssh hvac@<gateway-host> sudo systemctl status blaueis-gateway@<instance>`.
-- PSK mismatch: crypto handshake fails silently on the wire — check journal for `HandshakeError`.
-- Firewall: `nc -zv <gateway-host> 8765` from the HA host.
+- Gateway not running: `ssh hvac@<gateway-host> sudo systemctl status blaueis-gateway@<instance>` → `cannot_connect`.
+- PSK mismatch: key confirmation fails during connect → `invalid_auth` (gateway journal shows the auth-failure close).
+- Protocol-version mismatch (gateway and integration updated separately): the gateway closes during the handshake → `cannot_connect`; update both sides to the same protocol version.
+- Gateway connection pool full (`slot_pool_full`): transient → `cannot_connect`; close another client or retry shortly.
+- Firewall: `nc -zv <gateway-host> 8765` from the HA host → `cannot_connect`.
 - Wrong port: default is `8765`.
 
 ### 7.2 Integration loads but no entities appear
