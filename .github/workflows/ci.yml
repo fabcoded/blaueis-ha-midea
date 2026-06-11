@@ -9,8 +9,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Same 0.11.x line as the pre-commit hook's local gate — bump together.
@@ -24,18 +24,21 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install deps
         # pytest-homeassistant-custom-component pulls a real Home Assistant, which
         # the unit tests need for the platform modules the conftest does not stub
-        # (number / sensor / binary_sensor / button). jsonschema is used by the
-        # vendored lib's device-quirks schema.
+        # (number / sensor / binary_sensor / button). jsonschema / websockets /
+        # pyyaml / cryptography mirror manifest.json requirements — HA core does
+        # not guarantee them (websockets broke collection when __init__ gained
+        # its import).
         run: |
           python -m pip install --upgrade pip
-          pip install pytest-homeassistant-custom-component jsonschema
+          pip install pytest-homeassistant-custom-component jsonschema \
+                      websockets pyyaml cryptography
       - name: Run unit tests
         # Integration tests (-m integration) spin up a real HA event loop and are
         # intentionally excluded from the fast PR gate.
