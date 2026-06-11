@@ -9,7 +9,6 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries, exceptions
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
@@ -54,9 +53,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     # Test TCP connectivity first
     try:
-        _, writer = await asyncio.wait_for(
-            asyncio.open_connection(host, port), timeout=5
-        )
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=5)
         writer.close()
         await writer.wait_closed()
     except (OSError, asyncio.TimeoutError) as err:
@@ -107,17 +104,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> OptionsFlowHandler:
         return OptionsFlowHandler(config_entry)
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> config_entries.ConfigFlowResult:
         """Handle the initial step — gateway connection details."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             # Prevent duplicate entries for same host:port
-            self._async_abort_entries_match(
-                {CONF_HOST: user_input[CONF_HOST], CONF_PORT: user_input[CONF_PORT]}
-            )
+            self._async_abort_entries_match({CONF_HOST: user_input[CONF_HOST], CONF_PORT: user_input[CONF_PORT]})
 
             try:
                 info = await validate_input(self.hass, user_input)
@@ -130,13 +123,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception during setup")
                 errors["base"] = "unknown"
 
-        return self.async_show_form(
-            step_id="user", data_schema=DATA_SCHEMA, errors=errors
-        )
+        return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA, errors=errors)
 
-    async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]
-    ) -> config_entries.ConfigFlowResult:
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> config_entries.ConfigFlowResult:
         """Gateway started rejecting our PSK (or protocol version)."""
         return await self.async_step_reauth_confirm()
 
@@ -199,9 +188,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> config_entries.ConfigFlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -244,13 +231,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             for m in messages:
                 where = m.field or "<top>"
                 if m.severity in ("error", "warning"):
-                    _LOGGER.warning(
-                        "Glossary override [%s] %s: %s", m.code, where, m.message
-                    )
+                    _LOGGER.warning("Glossary override [%s] %s: %s", m.code, where, m.message)
                 else:
-                    _LOGGER.info(
-                        "Glossary override [%s] %s: %s", m.code, where, m.message
-                    )
+                    _LOGGER.info("Glossary override [%s] %s: %s", m.code, where, m.message)
             # The ``run_inventory_scan_now`` checkbox is a trigger, not
             # a setting — fire the scan service if it was ticked, then
             # drop the value so it doesn't persist. User re-opens
@@ -316,9 +299,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # treats single-option SelectSelector as an enum constraint and
         # rejects ANY submit that disagrees, deadlocking the form.
         coord = getattr(self._config_entry, "runtime_data", None)
-        cap_available = (
-            coord is not None and "screen_display" in coord.device.available_fields
-        )
+        cap_available = coord is not None and "screen_display" in coord.device.available_fields
         current_dbm = opts.get(CONF_DISPLAY_BUZZER_MODE, DISPLAY_BUZZER_MODE_DEFAULT)
         if current_dbm not in DISPLAY_BUZZER_POLICIES:
             current_dbm = DISPLAY_BUZZER_POLICY_NON_ENFORCED
@@ -363,13 +344,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # Display & Buzzer mode — persisted default. The select
             # entity on the device's control page also writes this
             # option live when the user picks a forced_* option.
-            schema_dict[vol.Optional(CONF_DISPLAY_BUZZER_MODE, default=current_dbm)] = (
-                selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=list(DISPLAY_BUZZER_POLICIES),
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                        translation_key=CONF_DISPLAY_BUZZER_MODE,
-                    )
+            schema_dict[vol.Optional(CONF_DISPLAY_BUZZER_MODE, default=current_dbm)] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=list(DISPLAY_BUZZER_POLICIES),
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    translation_key=CONF_DISPLAY_BUZZER_MODE,
                 )
             )
         # Advanced — glossary overrides (multiline YAML).
@@ -403,9 +382,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         #                                       __init__._parse_stored_overrides
         # Submitted value is ignored (popped in async_step_init); same
         # pattern as latest_field_inventory_display.
-        parse_status = _compute_override_parse_status(
-            opts.get(CONF_GLOSSARY_OVERRIDES, "") or ""
-        )
+        parse_status = _compute_override_parse_status(opts.get(CONF_GLOSSARY_OVERRIDES, "") or "")
         schema_dict[
             vol.Optional(
                 "override_parse_status_display",
@@ -428,9 +405,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # every Save. The submitted value is dropped in async_step_init,
         # never persisted to entry.options — see HA form-data trap §4
         # (a persistent-True default-True field can never be unticked).
-        schema_dict[vol.Optional("run_inventory_scan_now", default=False)] = (
-            selector.BooleanSelector()
-        )
+        schema_dict[vol.Optional("run_inventory_scan_now", default=False)] = selector.BooleanSelector()
 
         # Advanced — latest field-inventory report. Read-only(-ish):
         # the field is writable by voluptuous rules but we ignore
@@ -480,9 +455,7 @@ def _compute_override_parse_status(yaml_text: str) -> str:
     except GlossaryOverrideError:
         return "parse failed (check log)"
     except Exception:  # noqa: BLE001 — display field must never crash form
-        _LOGGER.exception(
-            "Glossary override status: unexpected error while computing parse status"
-        )
+        _LOGGER.exception("Glossary override status: unexpected error while computing parse status")
         return "parse failed (check log)"
     if not messages:
         return "parse ok"

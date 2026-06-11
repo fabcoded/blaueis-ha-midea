@@ -16,9 +16,7 @@ from unittest.mock import MagicMock
 from custom_components.blaueis_midea.sensor import BlaueisMideaSensor
 
 
-def _make_sensor(
-    read_full_payload: dict | None, *, power: bool = True
-) -> BlaueisMideaSensor:
+def _make_sensor(read_full_payload: dict | None, *, power: bool = True) -> BlaueisMideaSensor:
     """Build a sensor with a mocked coordinator/device.
 
     ``read_full_payload`` is what ``device.read_full(field_name)`` returns;

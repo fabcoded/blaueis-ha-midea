@@ -30,6 +30,7 @@ Design principles:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from typing import Awaitable, Callable, Optional, Protocol
@@ -73,9 +74,7 @@ class Scheduler(Protocol):
     Implementations must call the callback on the asyncio event loop
     (so the enforcer's coroutine-dispatch logic is single-threaded)."""
 
-    def call_later(
-        self, delay: float, callback: Callable[[], None]
-    ) -> Cancellable: ...
+    def call_later(self, delay: float, callback: Callable[[], None]) -> Cancellable: ...
 
 
 class Clock(Protocol):
@@ -97,9 +96,7 @@ class _AsyncioScheduler:
     def _loop_or_running(self) -> asyncio.AbstractEventLoop:
         return self._loop or asyncio.get_running_loop()
 
-    def call_later(
-        self, delay: float, callback: Callable[[], None]
-    ) -> Cancellable:
+    def call_later(self, delay: float, callback: Callable[[], None]) -> Cancellable:
         return self._loop_or_running().call_later(delay, callback)
 
 
@@ -245,10 +242,7 @@ class DisplayBuzzerEnforcer:
         # against a feature the firmware no longer advertises.
         if self._get_cap_available is not None and not self._get_cap_available():
             if not self._cap_loss_logged:
-                self._log.warning(
-                    "screen_display cap no longer advertised — "
-                    "stopping display/buzzer enforcement"
-                )
+                self._log.warning("screen_display cap no longer advertised — stopping display/buzzer enforcement")
                 self._cap_loss_logged = True
             self._cancel(self._cooldown_handle)
             self._cooldown_handle = None
@@ -282,14 +276,10 @@ class DisplayBuzzerEnforcer:
         if observed not in (DISPLAY_STATE_ON, DISPLAY_STATE_OFF):
             # Intermediate 1..6 — never seen on our SKU. Be conservative:
             # don't enforce against an unknown state.
-            self._log.debug(
-                "observed display-state %d is intermediate — skipping", observed
-            )
+            self._log.debug("observed display-state %d is intermediate — skipping", observed)
             return
 
-        desired = (
-            DISPLAY_STATE_ON if mode == MODE_FORCED_ON else DISPLAY_STATE_OFF
-        )
+        desired = DISPLAY_STATE_ON if mode == MODE_FORCED_ON else DISPLAY_STATE_OFF
 
         if observed == desired:
             # Reached steady state — clear the correction timers and event.
@@ -353,25 +343,19 @@ class DisplayBuzzerEnforcer:
         if self._closed:
             return
         self._cancel(self._cooldown_handle)
-        self._cooldown_handle = self._scheduler.call_later(
-            max(0.0, delay), self._on_cooldown_timer
-        )
+        self._cooldown_handle = self._scheduler.call_later(max(0.0, delay), self._on_cooldown_timer)
 
     def _arm_retry_timer(self) -> None:
         if self._closed:
             return
         self._cancel(self._retry_handle)
-        self._retry_handle = self._scheduler.call_later(
-            self._retry_gap_seconds, self._on_retry_timer
-        )
+        self._retry_handle = self._scheduler.call_later(self._retry_gap_seconds, self._on_retry_timer)
 
     def _reset_safety_timer(self) -> None:
         if self._closed:
             return
         self._cancel(self._safety_handle)
-        self._safety_handle = self._scheduler.call_later(
-            self._safety_idle_seconds, self._on_safety_timer
-        )
+        self._safety_handle = self._scheduler.call_later(self._safety_idle_seconds, self._on_safety_timer)
 
     def _on_cooldown_timer(self) -> None:
         self._cooldown_handle = None
@@ -410,14 +394,10 @@ class DisplayBuzzerEnforcer:
         # will try again. A successful poll should produce an ingress
         # which will re-arm via _reset_safety_timer().
         if not self._closed:
-            self._safety_handle = self._scheduler.call_later(
-                self._safety_idle_seconds, self._on_safety_timer
-            )
+            self._safety_handle = self._scheduler.call_later(self._safety_idle_seconds, self._on_safety_timer)
 
     @staticmethod
     def _cancel(handle: Optional[Cancellable]) -> None:
         if handle is not None:
-            try:
+            with contextlib.suppress(Exception):
                 handle.cancel()
-            except Exception:
-                pass

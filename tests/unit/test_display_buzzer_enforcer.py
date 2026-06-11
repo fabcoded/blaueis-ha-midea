@@ -24,12 +24,11 @@ import pytest
 from custom_components.blaueis_midea.display_buzzer_enforcer import (
     DISPLAY_STATE_OFF,
     DISPLAY_STATE_ON,
-    MODE_NON_ENFORCED,
     MODE_FORCED_OFF,
     MODE_FORCED_ON,
+    MODE_NON_ENFORCED,
     DisplayBuzzerEnforcer,
 )
-
 
 # ── Fakes ─────────────────────────────────────────────────────────────
 
@@ -121,8 +120,7 @@ class Probe:
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
-def _make_enforcer(probe: Probe, clock: FakeClock, scheduler: FakeScheduler,
-                   **overrides) -> DisplayBuzzerEnforcer:
+def _make_enforcer(probe: Probe, clock: FakeClock, scheduler: FakeScheduler, **overrides) -> DisplayBuzzerEnforcer:
     defaults = dict(
         cooldown_seconds=15.0,
         retry_gap_seconds=2.0,
@@ -302,18 +300,21 @@ async def test_retry_timer_bounded_by_max_attempts():
 
     # Attempt 2
     clock.advance(2.0)
-    sched.fire_due(); await _drain_tasks()
+    sched.fire_due()
+    await _drain_tasks()
     assert probe.toggle_calls == 2
 
     # Attempt 3
     clock.advance(2.0)
-    sched.fire_due(); await _drain_tasks()
+    sched.fire_due()
+    await _drain_tasks()
     assert probe.toggle_calls == 3
 
     # Fourth retry fire: should NOT send (retries exhausted),
     # should arm cooldown.
     clock.advance(2.0)
-    sched.fire_due(); await _drain_tasks()
+    sched.fire_due()
+    await _drain_tasks()
     assert probe.toggle_calls == 3
     assert e.has_cooldown_timer
 
@@ -327,10 +328,14 @@ async def test_cooldown_expiry_starts_fresh_event():
 
     await e.on_ingress()
     await _drain_tasks()
-    clock.advance(2.0); sched.fire_due(); await _drain_tasks()
+    clock.advance(2.0)
+    sched.fire_due()
+    await _drain_tasks()
     assert probe.toggle_calls == 2
     # Attempt retry 3 → exhausted → cooldown armed
-    clock.advance(2.0); sched.fire_due(); await _drain_tasks()
+    clock.advance(2.0)
+    sched.fire_due()
+    await _drain_tasks()
     assert probe.toggle_calls == 2  # not 3 (exhausted)
 
     # Advance past cooldown from t=100 (event start) — 15 s from 100 = 115.
@@ -459,7 +464,8 @@ async def test_toggle_exception_does_not_poison_enforcer():
     # Next retry succeeds
     probe.toggle_exception = None
     clock.advance(2.0)
-    sched.fire_due(); await _drain_tasks()
+    sched.fire_due()
+    await _drain_tasks()
     assert probe.toggle_calls == 2
 
 

@@ -84,7 +84,7 @@ def test_mode_swing_wins_over_stale_angle(axis):
 @pytest.mark.parametrize("axis,pos", AXIS_POS)
 def test_mode_positions(axis, pos):
     sw, ang = _fields(axis)
-    for raw, opt in zip(RAWS, pos):
+    for raw, opt in zip(RAWS, pos, strict=False):
         assert axis_mode(axis, _avail(sw, ang), _reader({sw: 0, ang: raw})) == opt
 
 
@@ -117,15 +117,13 @@ def test_mode_roundtrips_set(axis, pos):
 @pytest.mark.parametrize("axis", AXES)
 def test_set_swing_writes_only_swing(axis):
     sw, ang = _fields(axis)
-    assert axis_set_changes(axis, SWING_ON, _avail(sw, ang), _reader({})) == {
-        sw: SWING_ON_RAW
-    }
+    assert axis_set_changes(axis, SWING_ON, _avail(sw, ang), _reader({})) == {sw: SWING_ON_RAW}
 
 
 @pytest.mark.parametrize("axis,pos", AXIS_POS)
 def test_set_position_writes_only_angle(axis, pos):
     sw, ang = _fields(axis)
-    for raw, opt in zip(RAWS, pos):
+    for raw, opt in zip(RAWS, pos, strict=False):
         assert axis_set_changes(axis, opt, _avail(sw, ang), _reader({})) == {ang: raw}
 
 

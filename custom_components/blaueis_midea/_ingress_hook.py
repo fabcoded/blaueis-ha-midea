@@ -42,5 +42,4 @@ class IngressHook(Protocol):
     own state machine.
     """
 
-    async def on_ingress(self, coord: "BlaueisMideaCoordinator") -> None:
-        ...
+    async def on_ingress(self, coord: "BlaueisMideaCoordinator") -> None: ...

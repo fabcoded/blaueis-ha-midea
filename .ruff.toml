@@ -1,0 +1,11 @@
+target-version = "py311"
+line-length = 120
+
+# Vendored libmidea mirror — linted at its source repo, not here.
+extend-exclude = ["custom_components/blaueis_midea/lib"]
+
+[lint]
+select = ["E", "F", "B", "SIM", "I"]
+
+[format]
+quote-style = "double"

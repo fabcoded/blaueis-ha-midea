@@ -41,10 +41,7 @@ def check_set_result(result: dict | None, *, primary_fields: set[str]) -> None:
     preflight_blocked = _check_preflight(results)
     if preflight_blocked:
         _LOGGER.warning("Command blocked by preflight: %s", preflight_blocked)
-        raise HomeAssistantError(
-            "Command could not be sent \u2014 device state is stale. "
-            "Try again in a few seconds."
-        )
+        raise HomeAssistantError("Command could not be sent \u2014 device state is stale. Try again in a few seconds.")
 
 
 def _humanize_field(field_name: str) -> str:
@@ -65,10 +62,7 @@ def _humanize_rejection(reason: str) -> str:
     mode_labels = [MODE_MIDEA_TO_HA.get(int(v), v) if v.isdigit() else v for v in raw_modes]
     current_int = int(m.group(2))
     current_label = MODE_MIDEA_TO_HA.get(current_int, str(current_int))
-    return (
-        f"requires {_join_modes(mode_labels)} mode "
-        f"(current mode is {current_label.replace('_', ' ').title()})"
-    )
+    return f"requires {_join_modes(mode_labels)} mode (current mode is {current_label.replace('_', ' ').title()})"
 
 
 def _join_modes(modes: list[str]) -> str:

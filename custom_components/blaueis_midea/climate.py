@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from blaueis.core.codec import walk_fields
+from blaueis.core.gate_eval import evaluate_offered
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
@@ -20,12 +22,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from blaueis.core.codec import walk_fields
-from blaueis.core.gate_eval import evaluate_offered
-
 from . import BlaueisMideaConfigEntry
 from ._preflight import validate_or_raise
 from ._set_result import check_set_result
+from ._swing import axis_mode, axis_options, axis_set_changes
+from ._ux_mixin import interlock_states
 from .const import (
     CLIMATE_PRESET_FIELDS,
     FAN_PRESET_TO_SPEED,
@@ -35,8 +36,6 @@ from .const import (
     PRESET_NAME_TO_FIELD,
     SWING_AXES,
 )
-from ._swing import axis_mode, axis_options, axis_set_changes
-from ._ux_mixin import interlock_states
 from .coordinator import BlaueisMideaCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -114,9 +113,7 @@ class BlaueisMideaClimate(ClimateEntity):
         if self._available_presets:
             features |= ClimateEntityFeature.PRESET_MODE
             all_fields = walk_fields(self._device.glossary)
-            self._preset_gdefs = {
-                f: all_fields.get(f, {}) for f in self._available_presets
-            }
+            self._preset_gdefs = {f: all_fields.get(f, {}) for f in self._available_presets}
 
         self._attr_supported_features = features
 
@@ -160,7 +157,6 @@ class BlaueisMideaClimate(ClimateEntity):
 
         step = constraints.get("step")
         self._attr_target_temperature_step = step if step else 1.0
-
 
     def _determine_hvac_modes(self) -> list[HVACMode]:
         """Determine available HVAC modes from B5 capabilities."""
@@ -244,9 +240,7 @@ class BlaueisMideaClimate(ClimateEntity):
     async def _set_axis(self, axis: str, option: str) -> None:
         """Set one axis with a SINGLE field write; the firmware enforces the
         exclusion and clears the mutually-exclusive sibling."""
-        changes = axis_set_changes(
-            axis, option, self._device.available_fields, self._device.read
-        )
+        changes = axis_set_changes(axis, option, self._device.available_fields, self._device.read)
         if changes is None:
             _LOGGER.warning("blaueis: ignoring unsupported %s swing option %r", axis, option)
             return
@@ -314,11 +308,7 @@ class BlaueisMideaClimate(ClimateEntity):
             return [PRESET_NONE]
         return [
             PRESET_NONE,
-            *(
-                name
-                for field, name in self._available_presets.items()
-                if self._preset_visible(field)
-            ),
+            *(name for field, name in self._available_presets.items() if self._preset_visible(field)),
         ]
 
     @property

@@ -17,12 +17,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.blaueis_midea.select import BlaueisMideaSelect
 from custom_components.blaueis_midea.switch import BlaueisMideaSwitch
-
 
 # ── Coord factory ────────────────────────────────────────────────────
 
@@ -39,7 +37,8 @@ def _coord_with_glossary(
     works) and whose `device.status` reports the supplied raw mode."""
     fields_block: dict = {field_name: gdef}
     fields_block["operating_mode"] = {
-        "description": "x", "data_type": "uint8",
+        "description": "x",
+        "data_type": "uint8",
         "values": {
             "cool": {"raw": 0x40, "label": "Cool"},
             "heat": {"raw": 0x80, "label": "Heat"},
@@ -54,14 +53,10 @@ def _coord_with_glossary(
     coord.hass.config.language = "en"
 
     coord.device.glossary = {"fields": {"control": fields_block}}
-    coord.device.field_gdef.side_effect = (
-        lambda name: fields_block.get(name)
-    )
+    coord.device.field_gdef.side_effect = lambda name: fields_block.get(name)
     coord.device.available_fields = {field_name: {}, "operating_mode": {}}
     coord.device.read.return_value = True  # power on, etc.
-    coord.device.set = AsyncMock(
-        return_value={"expanded": {field_name: True}, "rejected": {}, "results": {}}
-    )
+    coord.device.set = AsyncMock(return_value={"expanded": {field_name: True}, "rejected": {}, "results": {}})
 
     if operating_mode_raw is not None:
         coord.device.status = {
@@ -90,7 +85,8 @@ async def test_switch_turn_on_blocked_by_mode_gate_does_not_call_set():
     """eco_mode permitted only in cool; current is heat → preflight
     raises and device.set() is never awaited."""
     gdef = {
-        "description": "x", "data_type": "bool",
+        "description": "x",
+        "data_type": "bool",
         "label": "Eco",
         "valid_modes": ["cool"],
     }
@@ -107,7 +103,8 @@ async def test_switch_turn_on_blocked_by_mode_gate_does_not_call_set():
 @pytest.mark.asyncio
 async def test_switch_turn_on_passes_validator_calls_set():
     gdef = {
-        "description": "x", "data_type": "bool",
+        "description": "x",
+        "data_type": "bool",
         "label": "Eco",
         "valid_modes": ["cool"],
     }
@@ -125,7 +122,8 @@ async def test_switch_turn_off_runs_validator_for_false():
     """Validator is called even for `False` so that a future glossary
     field that gates *off* (unlikely but possible) is honoured."""
     gdef = {
-        "description": "x", "data_type": "bool",
+        "description": "x",
+        "data_type": "bool",
         "label": "Eco",
         "valid_modes": ["cool"],
     }
@@ -146,7 +144,8 @@ async def test_select_option_blocked_by_enum_gate_does_not_call_set():
     enum (e.g. drift between dropdown and glossary) is rejected by
     the validator, not by the wire write."""
     gdef = {
-        "description": "x", "data_type": "uint8",
+        "description": "x",
+        "data_type": "uint8",
         "label": "Vane position",
         "values": {
             "left": {"raw": 1, "label": "Left"},
@@ -168,7 +167,8 @@ async def test_select_option_blocked_by_enum_gate_does_not_call_set():
 @pytest.mark.asyncio
 async def test_select_option_passes_validator_calls_set():
     gdef = {
-        "description": "x", "data_type": "uint8",
+        "description": "x",
+        "data_type": "uint8",
         "label": "Vane position",
         "values": {
             "left": {"raw": 1, "label": "Left"},

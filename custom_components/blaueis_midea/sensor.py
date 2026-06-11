@@ -55,11 +55,7 @@ async def async_setup_entry(
     #   - uptime_s            jumps back to ~0 only on Pi reboot
     #   - process_uptime_s    jumps back to 0 on every gateway restart
     #   - process_started_at  jumps forward (TIMESTAMP) on every restart
-    entities.append(
-        GatewaySensor(
-            coordinator, "cpu_percent", "CPU", SensorDeviceClass.POWER_FACTOR, "%"
-        )
-    )
+    entities.append(GatewaySensor(coordinator, "cpu_percent", "CPU", SensorDeviceClass.POWER_FACTOR, "%"))
     entities.append(GatewaySensor(coordinator, "ram_used_mb", "RAM Used", None, "MB"))
     entities.append(
         GatewaySensor(
@@ -72,11 +68,7 @@ async def async_setup_entry(
     )
     entities.append(GatewaySensor(coordinator, "disk_used_mb", "Disk Used", None, "MB"))
     entities.append(GatewaySensor(coordinator, "disk_free_mb", "Disk Free", None, "MB"))
-    entities.append(
-        GatewaySensor(
-            coordinator, "uptime_s", "Uptime", SensorDeviceClass.DURATION, "s"
-        )
-    )
+    entities.append(GatewaySensor(coordinator, "uptime_s", "Uptime", SensorDeviceClass.DURATION, "s"))
     entities.append(
         GatewaySensor(
             coordinator,
@@ -110,9 +102,7 @@ class BlaueisMideaSensor(SensorEntity):
     def __init__(self, coordinator: BlaueisMideaCoordinator, desc: dict) -> None:
         self._coord = coordinator
         self._field_name = desc["field_name"]
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_{self._field_name}"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{self._field_name}"
 
         # HA entity metadata (device_class, state_class, unit, precision,
         # display label) comes from the glossary's per-field `ha:` block
@@ -135,9 +125,7 @@ class BlaueisMideaSensor(SensorEntity):
         if "unit_of_measurement" in ha_meta:
             self._attr_native_unit_of_measurement = ha_meta["unit_of_measurement"]
         if "suggested_display_precision" in ha_meta:
-            self._attr_suggested_display_precision = ha_meta[
-                "suggested_display_precision"
-            ]
+            self._attr_suggested_display_precision = ha_meta["suggested_display_precision"]
         if "entity_category" in ha_meta:
             from homeassistant.helpers.entity import EntityCategory
 
@@ -162,9 +150,7 @@ class BlaueisMideaSensor(SensorEntity):
             raw = vdef.get("raw")
             if not isinstance(raw, int) or isinstance(raw, bool):
                 continue
-            self._value_lookup[raw] = (
-                vdef.get("label") or vdef.get("description") or _vkey
-            )
+            self._value_lookup[raw] = vdef.get("label") or vdef.get("description") or _vkey
 
         # Legacy hardcoded fallback — kicks in per-attribute when the glossary's
         # `ha:` block doesn't declare it. Delete once all measurement sensors
@@ -177,22 +163,14 @@ class BlaueisMideaSensor(SensorEntity):
                 self._attr_native_unit_of_measurement = dc_info[1]
 
     async def async_added_to_hass(self) -> None:
-        self._coord.register_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
+        self._coord.register_entity_callback(self._field_name, self.async_write_ha_state)
         # Refresh `available` whenever the mode changes — UX mask may flip
         # even when our own field's value is unchanged.
-        self._coord.register_entity_callback(
-            "operating_mode", self.async_write_ha_state
-        )
+        self._coord.register_entity_callback("operating_mode", self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self) -> None:
-        self._coord.unregister_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
-        self._coord.unregister_entity_callback(
-            "operating_mode", self.async_write_ha_state
-        )
+        self._coord.unregister_entity_callback(self._field_name, self.async_write_ha_state)
+        self._coord.unregister_entity_callback("operating_mode", self.async_write_ha_state)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -207,11 +185,7 @@ class BlaueisMideaSensor(SensorEntity):
         value = self._coord.device.read(self._field_name)
         if self._off_behavior == "hide" and not self._coord.device.read("power"):
             return None
-        if (
-            self._value_lookup
-            and isinstance(value, int)
-            and not isinstance(value, bool)
-        ):
+        if self._value_lookup and isinstance(value, int) and not isinstance(value, bool):
             return self._value_lookup.get(value, f"Unknown ({value})")
         return value
 

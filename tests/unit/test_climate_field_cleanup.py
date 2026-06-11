@@ -14,8 +14,6 @@ the same object we patched.
 import sys
 from unittest.mock import MagicMock
 
-import pytest
-
 from custom_components.blaueis_midea import _cleanup_orphaned_field_entities
 from custom_components.blaueis_midea.const import CLIMATE_EXCLUSIVE_FIELDS
 
@@ -72,9 +70,7 @@ def _run(registry, coord):
     # The function does `from homeassistant.helpers import entity_registry`,
     # which getattrs the conftest's mocked `homeassistant.helpers` module —
     # set async_get on that exact object so the function sees our registry.
-    sys.modules["homeassistant.helpers"].entity_registry.async_get = (
-        lambda hass: registry
-    )
+    sys.modules["homeassistant.helpers"].entity_registry.async_get = lambda hass: registry
     _cleanup_orphaned_field_entities(MagicMock(), _entry(), coord)
 
 
@@ -135,9 +131,7 @@ def test_other_config_entry_untouched():
 
 
 def test_foreign_prefix_untouched():
-    reg = _FakeRegistry(
-        [_RegEntry("select.foreign", _uid("louver_swing_vertical", host="10.0.0.9"))]
-    )
+    reg = _FakeRegistry([_RegEntry("select.foreign", _uid("louver_swing_vertical", host="10.0.0.9"))])
     _run(reg, _coord(LOUVER_FIELDS))
     assert reg.removed == []
 

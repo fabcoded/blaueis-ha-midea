@@ -56,9 +56,7 @@ def _make_entity(
     coord.port = 8765
     coord.connected = True
     coord.device = MagicMock()
-    coord.device.available_fields = (
-        {"screen_display": {}} if cap_available else {}
-    )
+    coord.device.available_fields = {"screen_display": {}} if cap_available else {}
 
     def _read(field: str):
         if field in ("screen_display", "screen_display_now"):

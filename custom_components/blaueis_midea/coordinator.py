@@ -7,14 +7,14 @@ and manages the entity registry based on B5-confirmed capabilities.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable
 from typing import Any
 
+from blaueis.client.device import Device
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
-
-from blaueis.client.device import Device
 
 from ._ingress_hook import IngressHook
 from .const import (
@@ -131,9 +131,7 @@ class BlaueisMideaCoordinator:
         # ingest events, so without an active push entities keep
         # showing their last-known state. The watcher flips them.
         self._last_known_fresh = self.device_fresh
-        self._freshness_watcher_task = self.hass.loop.create_task(
-            self._freshness_watcher()
-        )
+        self._freshness_watcher_task = self.hass.loop.create_task(self._freshness_watcher())
 
         _LOGGER.info(
             "Blaueis coordinator started: %d available fields, queries=%s",
@@ -147,10 +145,8 @@ class BlaueisMideaCoordinator:
             await self.blaueis_follow_me.async_stop()
         if self._freshness_watcher_task is not None:
             self._freshness_watcher_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._freshness_watcher_task
-            except asyncio.CancelledError:
-                pass
             self._freshness_watcher_task = None
         await self.device.stop()
         self._connected = False
@@ -186,10 +182,8 @@ class BlaueisMideaCoordinator:
 
     def unregister_ingress_hook(self, hook: IngressHook) -> None:
         """Unregister an ingress hook. Safe to call if not registered."""
-        try:
+        with contextlib.suppress(ValueError):
             self._ingress_hooks.remove(hook)
-        except ValueError:
-            pass
 
     # ── Entity callback registration ────────────────────────
 
@@ -275,9 +269,7 @@ class BlaueisMideaCoordinator:
 
     # ── Device callbacks ────────────────────────────────────
 
-    def _on_device_state_change(
-        self, field_name: str, new_value: Any, old_value: Any
-    ) -> None:
+    def _on_device_state_change(self, field_name: str, new_value: Any, old_value: Any) -> None:
         """Called by Device when a field value changes."""
         # Notify standalone entity callbacks (switch, sensor, etc.)
         cbs = self._entity_callbacks.get(field_name, set())
@@ -317,7 +309,7 @@ class BlaueisMideaCoordinator:
             *(h.on_ingress(self) for h in hooks),
             return_exceptions=True,
         )
-        for hook, result in zip(hooks, results):
+        for hook, result in zip(hooks, results, strict=False):
             if isinstance(result, Exception):
                 _LOGGER.exception(
                     "Ingress hook %r raised: %s",

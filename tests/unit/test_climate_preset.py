@@ -10,10 +10,9 @@ Real-glossary visible_in_modes anchoring these tests:
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
+from blaueis.core.codec import load_glossary, walk_fields
 from homeassistant.exceptions import ServiceValidationError
 
-from blaueis.core.codec import load_glossary, walk_fields
 from custom_components.blaueis_midea.climate import BlaueisMideaClimate
 
 HOST, PORT = "127.0.0.1", 8765
@@ -41,9 +40,7 @@ def _entity(mode, active=None, power=True, set_result=None, cap_values=None):
     # would read the auto-mock as an empty mode set and gate it off everywhere.
     coord.device.active_constraints = lambda name: None
     coord.device.cap_values = lambda: (cap_values or {})
-    coord.device.set = AsyncMock(
-        return_value=set_result or {"rejected": {}, "results": {}}
-    )
+    coord.device.set = AsyncMock(return_value=set_result or {"rejected": {}, "results": {}})
     return BlaueisMideaClimate(coord)
 
 
@@ -128,7 +125,9 @@ async def test_offered_preset_device_rejection_resyncs():
         set_result={"rejected": {"frost_protection": "device busy"}, "results": {}},
     )
     ent.async_write_ha_state = MagicMock()
-    with pytest.raises(Exception):
+    from homeassistant.exceptions import HomeAssistantError
+
+    with pytest.raises(HomeAssistantError):
         await ent.async_set_preset_mode("Frost Protection")
     ent._device.set.assert_awaited_once()  # gate passed → write sent
     ent.async_write_ha_state.assert_called_once()

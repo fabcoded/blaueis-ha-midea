@@ -51,9 +51,7 @@ async def test_setup_hydrates_prior_snapshot_from_store(hass, mock_config_entry)
     mock_config_entry.runtime_data = coord
 
     # Seed the Store before setup runs.
-    store = Store(
-        hass, _STORE_VERSION, _STORE_KEY_FMT.format(entry_id=mock_config_entry.entry_id)
-    )
+    store = Store(hass, _STORE_VERSION, _STORE_KEY_FMT.format(entry_id=mock_config_entry.entry_id))
     snapshot_js = {"meta": {"timestamp": "2026-04-24T08:00:00+00:00"}, "fields": {}}
     await store.async_save(
         {
@@ -105,9 +103,7 @@ async def test_teardown_clears_ram_but_preserves_disk(hass, mock_config_entry):
     coord = _fake_coordinator()
     mock_config_entry.runtime_data = coord
 
-    store = Store(
-        hass, _STORE_VERSION, _STORE_KEY_FMT.format(entry_id=mock_config_entry.entry_id)
-    )
+    store = Store(hass, _STORE_VERSION, _STORE_KEY_FMT.format(entry_id=mock_config_entry.entry_id))
     payload = {
         "timestamp": "2026-04-24T09:00:00+00:00",
         "label": "will-survive",

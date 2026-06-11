@@ -71,9 +71,7 @@ def test_switch_handles_missing_language_attr():
     coord.host = "127.0.0.1"
     coord.port = 8765
     # Force AttributeError on language access by deleting the attribute.
-    type(coord.hass.config).language = property(
-        fget=lambda self: (_ for _ in ()).throw(AttributeError("language"))
-    )
+    type(coord.hass.config).language = property(fget=lambda self: (_ for _ in ()).throw(AttributeError("language")))
     coord.device.field_gdef.return_value = {
         "label_i18n": {"en": "Eco mode"},
     }

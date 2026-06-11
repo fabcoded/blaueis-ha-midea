@@ -41,8 +41,10 @@ from .const import (  # noqa: E402
     DEBUG_RING_SIZE_MB,
     DISPLAY_BUZZER_LEGACY_MIGRATION,
     DISPLAY_BUZZER_POLICIES,
-    DOMAIN as DOMAIN,
     SYNTHETIC_ENTITY_CAP_DEPENDENCIES,
+)
+from .const import (  # noqa: E402
+    DOMAIN as DOMAIN,
 )
 from .coordinator import BlaueisMideaCoordinator  # noqa: E402
 
@@ -101,9 +103,7 @@ _FIELD_RENAMES: dict[str, str] = {
 }
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: BlaueisMideaConfigEntry
-) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> bool:
     """Set up Blaueis Midea AC from a config entry."""
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
@@ -142,9 +142,7 @@ async def async_setup_entry(
     )
     # Snapshot the YAML text we just applied so _async_options_updated
     # can detect changes that warrant a full entry reload.
-    coordinator._applied_override_yaml = (
-        entry.options.get(CONF_GLOSSARY_OVERRIDES, "") or ""
-    )
+    coordinator._applied_override_yaml = entry.options.get(CONF_GLOSSARY_OVERRIDES, "") or ""
 
     # Runtime auth failure (gateway PSK rotated while we were connected):
     # the Device stops its reconnect loop and fires this hook exactly
@@ -170,9 +168,7 @@ async def async_setup_entry(
         # the reauth flow.
         with contextlib.suppress(Exception):
             await coordinator.device.stop()
-        raise ConfigEntryAuthFailed(
-            f"Blaueis gateway at {host}:{port} rejected our credentials: {err}"
-        ) from err
+        raise ConfigEntryAuthFailed(f"Blaueis gateway at {host}:{port} rejected our credentials: {err}") from err
     except (HandshakeError, TimeoutError, OSError, WebSocketException) as err:
         # Gateway down/unreachable at setup time is transient — let HA
         # retry with backoff instead of failing the entry permanently.
@@ -180,9 +176,7 @@ async def async_setup_entry(
         # malformed reply, not a credential problem.
         with contextlib.suppress(Exception):
             await coordinator.device.stop()
-        raise ConfigEntryNotReady(
-            f"Cannot reach Blaueis gateway at {host}:{port}: {err}"
-        ) from err
+        raise ConfigEntryNotReady(f"Cannot reach Blaueis gateway at {host}:{port}: {err}") from err
 
     entry.runtime_data = coordinator
 
@@ -234,9 +228,7 @@ async def async_setup_entry(
     return True
 
 
-async def _async_options_updated(
-    hass: HomeAssistant, entry: BlaueisMideaConfigEntry
-) -> None:
+async def _async_options_updated(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> None:
     """Reconcile Follow Me Function + Display/Buzzer mode with runtime state."""
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
 
@@ -289,9 +281,7 @@ async def _async_options_updated(
         return
 
 
-async def async_unload_entry(
-    hass: HomeAssistant, entry: BlaueisMideaConfigEntry
-) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> bool:
     """Unload a config entry."""
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
 
@@ -442,8 +432,7 @@ def _migrate_fmf_keys(
 
     if changed:
         _LOGGER.info(
-            "Follow Me: migrated legacy option keys → "
-            "follow_me_function_configured, follow_me_function_enabled"
+            "Follow Me: migrated legacy option keys → follow_me_function_configured, follow_me_function_enabled"
         )
         hass.config_entries.async_update_entry(entry, options=opts)
 
@@ -476,10 +465,7 @@ def _enforce_fmf_invariant(
         return False
     new_opts = {**entry.options, CONF_FMF_ENABLED: False}
     hass.config_entries.async_update_entry(entry, options=new_opts)
-    _LOGGER.info(
-        "Follow Me: Configured=False — auto-clearing Enabled "
-        "to keep persisted state consistent"
-    )
+    _LOGGER.info("Follow Me: Configured=False — auto-clearing Enabled to keep persisted state consistent")
     return True
 
 
@@ -637,8 +623,7 @@ def _cleanup_orphaned_field_entities(
             if suffix in available:
                 continue  # field still advertised — entity belongs
             _LOGGER.info(
-                "Removing orphaned field entity %s (unique_id=%s) — "
-                "field %r no longer in available_fields",
+                "Removing orphaned field entity %s (unique_id=%s) — field %r no longer in available_fields",
                 ent.entity_id,
                 ent.unique_id,
                 suffix,

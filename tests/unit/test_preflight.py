@@ -10,12 +10,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.blaueis_midea._preflight import validate_or_raise
 from custom_components.blaueis_midea.const import DOMAIN
-
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -51,9 +49,13 @@ def _make_coord(
 
 
 def test_ok_returns_silently():
-    g = {"target_temperature": {
-        "description": "x", "data_type": "float", "range": [16.0, 30.5],
-    }}
+    g = {
+        "target_temperature": {
+            "description": "x",
+            "data_type": "float",
+            "range": [16.0, 30.5],
+        }
+    }
     coord = _make_coord(glossary=g)
     # Does not raise
     validate_or_raise(coord, "target_temperature", 22.0)
@@ -71,10 +73,14 @@ def test_field_unknown_silently_passes_through():
 
 
 def test_out_of_range_raises_with_translation_keys():
-    g = {"target_temperature": {
-        "description": "x", "data_type": "float", "range": [16.0, 30.5],
-        "label": "Target temperature",
-    }}
+    g = {
+        "target_temperature": {
+            "description": "x",
+            "data_type": "float",
+            "range": [16.0, 30.5],
+            "label": "Target temperature",
+        }
+    }
     coord = _make_coord(glossary=g)
     with pytest.raises(ServiceValidationError) as exc:
         validate_or_raise(coord, "target_temperature", 99.0)
@@ -88,11 +94,15 @@ def test_out_of_range_raises_with_translation_keys():
 
 
 def test_out_of_range_uses_localised_label_when_present():
-    g = {"target_temperature": {
-        "description": "x", "data_type": "float", "range": [16.0, 30.5],
-        "label": "Target temperature",
-        "label_i18n": {"de": "Zieltemperatur", "en": "Target temperature"},
-    }}
+    g = {
+        "target_temperature": {
+            "description": "x",
+            "data_type": "float",
+            "range": [16.0, 30.5],
+            "label": "Target temperature",
+            "label_i18n": {"de": "Zieltemperatur", "en": "Target temperature"},
+        }
+    }
     coord = _make_coord(glossary=g, lang="de")
     with pytest.raises(ServiceValidationError) as exc:
         validate_or_raise(coord, "target_temperature", 99.0)
@@ -100,9 +110,13 @@ def test_out_of_range_uses_localised_label_when_present():
 
 
 def test_out_of_range_falls_back_to_title_case_when_no_label():
-    g = {"target_temperature": {
-        "description": "x", "data_type": "float", "range": [16.0, 30.5],
-    }}
+    g = {
+        "target_temperature": {
+            "description": "x",
+            "data_type": "float",
+            "range": [16.0, 30.5],
+        }
+    }
     coord = _make_coord(glossary=g)
     with pytest.raises(ServiceValidationError) as exc:
         validate_or_raise(coord, "target_temperature", 99.0)
@@ -113,14 +127,17 @@ def test_out_of_range_falls_back_to_title_case_when_no_label():
 
 
 def test_not_in_enum_raises_with_allowed_list():
-    g = {"operating_mode": {
-        "description": "x", "data_type": "uint8",
-        "label": "Mode",
-        "values": {
-            "cool": {"raw": 0x40},
-            "heat": {"raw": 0x80},
-        },
-    }}
+    g = {
+        "operating_mode": {
+            "description": "x",
+            "data_type": "uint8",
+            "label": "Mode",
+            "values": {
+                "cool": {"raw": 0x40},
+                "heat": {"raw": 0x80},
+            },
+        }
+    }
     coord = _make_coord(glossary=g)
     with pytest.raises(ServiceValidationError) as exc:
         validate_or_raise(coord, "operating_mode", 0x99)
@@ -139,7 +156,8 @@ def _glossary_with_operating_mode() -> dict:
     """Helper — minimal operating_mode definition so token rendering works."""
     return {
         "operating_mode": {
-            "description": "x", "data_type": "uint8",
+            "description": "x",
+            "data_type": "uint8",
             "values": {
                 "cool": {"raw": 0x40, "label": "Cool"},
                 "heat": {
@@ -153,21 +171,14 @@ def _glossary_with_operating_mode() -> dict:
 
 
 def _status_with_mode(raw: int) -> dict:
-    return {
-        "fields": {
-            "operating_mode": {
-                "sources": {
-                    "rsp_0xc0": {"value": raw, "ts": "t0", "generation": "legacy"}
-                }
-            }
-        }
-    }
+    return {"fields": {"operating_mode": {"sources": {"rsp_0xc0": {"value": raw, "ts": "t0", "generation": "legacy"}}}}}
 
 
 def test_mode_disallowed_raises_with_field_and_mode():
     g = _glossary_with_operating_mode()
     g["eco_mode"] = {
-        "description": "x", "data_type": "bool",
+        "description": "x",
+        "data_type": "bool",
         "label": "Eco",
         "valid_modes": ["cool"],
     }
@@ -183,7 +194,8 @@ def test_mode_disallowed_raises_with_field_and_mode():
 def test_mode_disallowed_renders_localised_mode_label():
     g = _glossary_with_operating_mode()
     g["eco_mode"] = {
-        "description": "x", "data_type": "bool",
+        "description": "x",
+        "data_type": "bool",
         "label": "Eco",
         "valid_modes": ["cool"],
     }
@@ -201,7 +213,8 @@ def test_mode_disallowed_unknown_token_falls_back_to_title_case():
     # Add an extra raw with a token that has no label
     g["operating_mode"]["values"]["weird_mode"] = {"raw": 0x99}
     g["eco_mode"] = {
-        "description": "x", "data_type": "bool",
+        "description": "x",
+        "data_type": "bool",
         "label": "Eco",
         "valid_modes": ["cool"],
     }

@@ -16,7 +16,7 @@ Two classes:
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import logging
 
 from homeassistant.components.select import SelectEntity
@@ -85,9 +85,7 @@ class BlaueisMideaSelect(SelectEntity):
     def __init__(self, coordinator: BlaueisMideaCoordinator, desc: dict) -> None:
         self._coord = coordinator
         self._field_name = desc["field_name"]
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_{self._field_name}"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{self._field_name}"
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         self._attr_name = glossary_label_for_lang(
             gdef,
@@ -95,7 +93,6 @@ class BlaueisMideaSelect(SelectEntity):
             getattr(coordinator.hass.config, "language", None),
         )
 
-        ha_meta = gdef.get("ha") or {}
         if gdef.get("feature_available", "").endswith("-opt"):
             self._attr_entity_registry_enabled_default = False
 
@@ -127,31 +124,19 @@ class BlaueisMideaSelect(SelectEntity):
         if not user_options and valid_set:
             user_options = [str(v) for v in valid_set]
             for v in valid_set:
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     self._name_to_raw.setdefault(str(v), int(v))
-                except (TypeError, ValueError):
-                    pass
 
         self._attr_options = user_options
-        self._user_selectable_raws = sorted(
-            {self._name_to_raw[n] for n in user_options if n in self._name_to_raw}
-        )
+        self._user_selectable_raws = sorted({self._name_to_raw[n] for n in user_options if n in self._name_to_raw})
 
     async def async_added_to_hass(self) -> None:
-        self._coord.register_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
-        self._coord.register_entity_callback(
-            "operating_mode", self.async_write_ha_state
-        )
+        self._coord.register_entity_callback(self._field_name, self.async_write_ha_state)
+        self._coord.register_entity_callback("operating_mode", self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self) -> None:
-        self._coord.unregister_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
-        self._coord.unregister_entity_callback(
-            "operating_mode", self.async_write_ha_state
-        )
+        self._coord.unregister_entity_callback(self._field_name, self.async_write_ha_state)
+        self._coord.unregister_entity_callback("operating_mode", self.async_write_ha_state)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -236,11 +221,7 @@ class BlaueisMideaSelect(SelectEntity):
         # semantic single-purpose. Re-fire write_ha_state so any
         # optimistic frontend selection snaps back to the actual
         # ``current_option`` (still the AC-reported value).
-        if (
-            isinstance(value, int)
-            and self._user_selectable_raws
-            and value not in self._user_selectable_raws
-        ):
+        if isinstance(value, int) and self._user_selectable_raws and value not in self._user_selectable_raws:
             self.async_write_ha_state()
             return
         validate_or_raise(self._coord, self._field_name, value)
@@ -334,9 +315,7 @@ class BlaueisMideaDisplayBuzzerModeSelect(SelectEntity):
         self._hass = hass
         self._entry = entry
         self._coord = coordinator
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_display_buzzer_mode"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_display_buzzer_mode"
         self._attr_name = "Display & Buzzer mode"
         self._enforcer: DisplayBuzzerEnforcer | None = None
 
@@ -359,9 +338,7 @@ class BlaueisMideaDisplayBuzzerModeSelect(SelectEntity):
     def _stored_policy(self) -> str:
         """Return the stored policy, normalising unknown values to
         non-enforced so the UI never shows an invalid option."""
-        raw = self._entry.options.get(
-            CONF_DISPLAY_BUZZER_MODE, DISPLAY_BUZZER_MODE_DEFAULT
-        )
+        raw = self._entry.options.get(CONF_DISPLAY_BUZZER_MODE, DISPLAY_BUZZER_MODE_DEFAULT)
         if raw not in DISPLAY_BUZZER_POLICIES:
             return DISPLAY_BUZZER_POLICY_NON_ENFORCED
         return raw
@@ -411,29 +388,21 @@ class BlaueisMideaDisplayBuzzerModeSelect(SelectEntity):
         # any change to that field must write_ha_state. This also drives
         # availability updates on cap transitions (the field stops
         # updating when the cap vanishes).
-        self._coord.register_entity_callback(
-            "screen_display", self.async_write_ha_state
-        )
+        self._coord.register_entity_callback("screen_display", self.async_write_ha_state)
         # Listen for the synthetic ``_display_buzzer_mode`` callback fired
         # by ``__init__._async_options_updated`` whenever the config-entry
         # option changes (e.g. user picked forced_on in the Configure
         # dialog). The handler refreshes the entity AND kicks the enforcer
         # so the new policy takes effect immediately, not on the next
         # rsp_* ingress.
-        self._coord.register_entity_callback(
-            "_display_buzzer_mode", self._on_mode_option_changed
-        )
+        self._coord.register_entity_callback("_display_buzzer_mode", self._on_mode_option_changed)
         # Kick an initial evaluate so the enforcer catches up with state
         # that arrived before this entity was added.
         self._hass.loop.create_task(self._enforcer.on_ingress())
 
     async def async_will_remove_from_hass(self) -> None:
-        self._coord.unregister_entity_callback(
-            "screen_display", self.async_write_ha_state
-        )
-        self._coord.unregister_entity_callback(
-            "_display_buzzer_mode", self._on_mode_option_changed
-        )
+        self._coord.unregister_entity_callback("screen_display", self.async_write_ha_state)
+        self._coord.unregister_entity_callback("_display_buzzer_mode", self._on_mode_option_changed)
         if self._enforcer is not None:
             self._coord.unregister_ingress_hook(self._enforcer)
             await self._enforcer.close()
@@ -467,9 +436,7 @@ class BlaueisMideaDisplayBuzzerModeSelect(SelectEntity):
                 **self._entry.options,
                 CONF_DISPLAY_BUZZER_MODE: new_policy,
             }
-            self._hass.config_entries.async_update_entry(
-                self._entry, options=new_options
-            )
+            self._hass.config_entries.async_update_entry(self._entry, options=new_options)
 
         # For non-enforced picks: fire one toggle if state doesn't
         # already match the picked option. Fire-and-forget — the
@@ -477,11 +444,7 @@ class BlaueisMideaDisplayBuzzerModeSelect(SelectEntity):
         # Reading state here (not inside the enforcer) keeps the one-shot
         # semantics decoupled from the cooldown-based enforcement loop.
         if option in (DISPLAY_BUZZER_OPTION_ON, DISPLAY_BUZZER_OPTION_OFF):
-            target = (
-                DISPLAY_STATE_ON
-                if option == DISPLAY_BUZZER_OPTION_ON
-                else DISPLAY_STATE_OFF
-            )
+            target = DISPLAY_STATE_ON if option == DISPLAY_BUZZER_OPTION_ON else DISPLAY_STATE_OFF
             observed = _read_observed_display_bits(self._coord)
             if observed is not None and observed != target:
                 try:

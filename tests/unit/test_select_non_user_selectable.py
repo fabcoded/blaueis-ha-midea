@@ -46,12 +46,8 @@ def _coord(*, current_raw: int | None) -> MagicMock:
         },
     }
     coord.device.field_gdef.return_value = gdef
-    coord.device.read.side_effect = lambda name: (
-        current_raw if name == "louver_swing_angle_lr_enum" else None
-    )
-    coord.device.set = AsyncMock(
-        return_value={"expanded": {}, "rejected": {}, "results": {}}
-    )
+    coord.device.read.side_effect = lambda name: (current_raw if name == "louver_swing_angle_lr_enum" else None)
+    coord.device.set = AsyncMock(return_value={"expanded": {}, "rejected": {}, "results": {}})
     return coord
 
 

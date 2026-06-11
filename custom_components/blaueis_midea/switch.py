@@ -62,12 +62,9 @@ class BlaueisMideaSwitch(SwitchEntity):
         self._coord = coordinator
         self._entry = entry
         self._field_name = desc["field_name"]
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_{self._field_name}"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{self._field_name}"
 
         gdef = coordinator.device.field_gdef(self._field_name) or {}
-        ha_meta = gdef.get("ha") or {}
         self._attr_name = glossary_label_for_lang(
             gdef,
             self._field_name,
@@ -77,20 +74,12 @@ class BlaueisMideaSwitch(SwitchEntity):
             self._attr_entity_registry_enabled_default = False
 
     async def async_added_to_hass(self) -> None:
-        self._coord.register_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
-        self._coord.register_entity_callback(
-            "operating_mode", self.async_write_ha_state
-        )
+        self._coord.register_entity_callback(self._field_name, self.async_write_ha_state)
+        self._coord.register_entity_callback("operating_mode", self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self) -> None:
-        self._coord.unregister_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
-        self._coord.unregister_entity_callback(
-            "operating_mode", self.async_write_ha_state
-        )
+        self._coord.unregister_entity_callback(self._field_name, self.async_write_ha_state)
+        self._coord.unregister_entity_callback("operating_mode", self.async_write_ha_state)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -152,9 +141,7 @@ class BlauiesFollowMeSwitch(SwitchEntity):
     ) -> None:
         self._coord = coordinator
         self._entry = entry
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_blaueis_follow_me"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_blaueis_follow_me"
 
     async def async_added_to_hass(self) -> None:
         # Clear any stale hidden_by carried over from earlier versions
@@ -191,9 +178,7 @@ class BlauiesFollowMeSwitch(SwitchEntity):
             return False
         if not self._coord.device.read("power"):
             return False
-        if not self._entry.options.get(CONF_FMF_SENSOR):
-            return False
-        return True
+        return bool(self._entry.options.get(CONF_FMF_SENSOR))
 
     @property
     def is_on(self) -> bool:
@@ -202,9 +187,7 @@ class BlauiesFollowMeSwitch(SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         source = self._entry.options.get(CONF_FMF_SENSOR)
         if not source:
-            _LOGGER.warning(
-                "Cannot start Follow Me Function: no source sensor configured"
-            )
+            _LOGGER.warning("Cannot start Follow Me Function: no source sensor configured")
             return
         await self._coord.blaueis_follow_me.async_start(source)
         self.hass.config_entries.async_update_entry(

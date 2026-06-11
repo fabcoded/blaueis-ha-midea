@@ -17,12 +17,8 @@ import pytest
 def hass_with_entries():
     """Fake hass with two loaded entries (each runtime_data is a coord)."""
     hass = MagicMock()
-    coord1 = SimpleNamespace(
-        device=SimpleNamespace(set_test_suppression=MagicMock(return_value=60.0))
-    )
-    coord2 = SimpleNamespace(
-        device=SimpleNamespace(set_test_suppression=MagicMock(return_value=60.0))
-    )
+    coord1 = SimpleNamespace(device=SimpleNamespace(set_test_suppression=MagicMock(return_value=60.0)))
+    coord2 = SimpleNamespace(device=SimpleNamespace(set_test_suppression=MagicMock(return_value=60.0)))
     entry1 = SimpleNamespace(title="Atelier", runtime_data=coord1)
     entry2 = SimpleNamespace(title="Studio", runtime_data=coord2)
     hass.config_entries.async_entries.return_value = [entry1, entry2]
@@ -90,9 +86,7 @@ async def test_handler_skips_entries_without_runtime_data():
     hass.services.has_service.return_value = False
     entry_loaded = SimpleNamespace(
         title="Atelier",
-        runtime_data=SimpleNamespace(
-            device=SimpleNamespace(set_test_suppression=MagicMock(return_value=60.0))
-        ),
+        runtime_data=SimpleNamespace(device=SimpleNamespace(set_test_suppression=MagicMock(return_value=60.0))),
     )
     entry_unloaded = SimpleNamespace(title="Stale", runtime_data=None)
     hass.config_entries.async_entries.return_value = [

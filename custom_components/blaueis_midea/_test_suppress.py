@@ -49,11 +49,8 @@ async def async_setup_test_suppress(hass: HomeAssistant) -> None:
             actual = coord.device.set_test_suppression(duration)
             applied.append((entry.title, actual))
         _LOGGER.warning(
-            "test_suppress: applied %r — entities will fade once the "
-            "staleness window expires",
+            "test_suppress: applied %r — entities will fade once the staleness window expires",
             applied,
         )
 
-    hass.services.async_register(
-        DOMAIN, SERVICE_TEST_SUPPRESS, _handler, schema=SERVICE_SCHEMA
-    )
+    hass.services.async_register(DOMAIN, SERVICE_TEST_SUPPRESS, _handler, schema=SERVICE_SCHEMA)

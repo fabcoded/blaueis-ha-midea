@@ -45,11 +45,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers.storage import Store
-
 from blaueis.core.codec import walk_fields
-from blaueis.core.scan_queries import build_scan_queries
 from blaueis.core.inventory import (
     CLASS_POPULATED,
     ShadowDecoder,
@@ -59,6 +55,9 @@ from blaueis.core.inventory import (
     generate_markdown_report,
     synthesize_override_snippet,
 )
+from blaueis.core.scan_queries import build_scan_queries
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
 
@@ -103,15 +102,11 @@ _STORE_VERSION = 1
 _STORE_KEY_FMT = "blaueis_midea.{entry_id}.snapshot"
 
 
-def _store_for_entry(
-    hass: HomeAssistant, entry: "BlaueisMideaConfigEntry"
-) -> Store:
+def _store_for_entry(hass: HomeAssistant, entry: "BlaueisMideaConfigEntry") -> Store:
     """Return the per-entry HA Store handle. Store debounces writes and
     serialises via JSON; our payload is already a JSON-compatible dict
     (markdown as string + snapshot_json as dict)."""
-    return Store(
-        hass, _STORE_VERSION, _STORE_KEY_FMT.format(entry_id=entry.entry_id)
-    )
+    return Store(hass, _STORE_VERSION, _STORE_KEY_FMT.format(entry_id=entry.entry_id))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -131,9 +126,7 @@ def _build_scan_query_list(glossary: dict) -> list[tuple[str, bytes]]:
 # ══════════════════════════════════════════════════════════════════════════
 
 
-async def async_setup_field_inventory(
-    hass: HomeAssistant, entry: "BlaueisMideaConfigEntry"
-) -> None:
+async def async_setup_field_inventory(hass: HomeAssistant, entry: "BlaueisMideaConfigEntry") -> None:
     """Register the service once globally and hydrate prior-snapshot
     state onto the coordinator from HA Store.
 
@@ -188,9 +181,7 @@ async def async_setup_field_inventory(
         )
 
 
-async def async_teardown_field_inventory(
-    hass: HomeAssistant, entry: "BlaueisMideaConfigEntry"
-) -> None:
+async def async_teardown_field_inventory(hass: HomeAssistant, entry: "BlaueisMideaConfigEntry") -> None:
     """Release session state when the entry unloads. Disk snapshot
     stays put for the next load — persistent by design."""
     coordinator = getattr(entry, "runtime_data", None)
@@ -217,21 +208,15 @@ async def _handle_service_call(hass: HomeAssistant, call: ServiceCall) -> None:
 
     entries = hass.config_entries.async_entries(DOMAIN)
     if not entries:
-        _LOGGER.warning(
-            "run_field_inventory: no Blaueis Midea AC config entries loaded"
-        )
+        _LOGGER.warning("run_field_inventory: no Blaueis Midea AC config entries loaded")
         return
 
     for entry in entries:
         coord = getattr(entry, "runtime_data", None)
         if coord is None or not getattr(coord, "connected", False):
-            _LOGGER.warning(
-                "run_field_inventory: skipping %s — not connected", entry.title
-            )
+            _LOGGER.warning("run_field_inventory: skipping %s — not connected", entry.title)
             continue
-        hass.async_create_task(
-            _run_inventory_scan(hass, entry, label, suggest_overrides, reset_prior)
-        )
+        hass.async_create_task(_run_inventory_scan(hass, entry, label, suggest_overrides, reset_prior))
 
 
 async def _run_inventory_scan(
@@ -272,16 +257,12 @@ async def _run_inventory_scan(
             for qlabel, frame_bytes in queries:
                 client = getattr(device, "_client", None)
                 if client is None or getattr(client, "_ws", None) is None:
-                    _LOGGER.warning(
-                        "field_inventory: connection lost — aborting scan"
-                    )
+                    _LOGGER.warning("field_inventory: connection lost — aborting scan")
                     break
                 try:
                     await client.send_frame(frame_bytes.hex(" "))
                 except Exception as e:
-                    _LOGGER.debug(
-                        "field_inventory: send %s failed: %s", qlabel, e
-                    )
+                    _LOGGER.debug("field_inventory: send %s failed: %s", qlabel, e)
                 await asyncio.sleep(_INJECT_SPACING_SECONDS)
             await asyncio.sleep(_SCAN_COLLECTION_SECONDS)
         finally:
@@ -289,17 +270,11 @@ async def _run_inventory_scan(
             # path is back to its zero-cost steady state.
             device.unregister_frame_observer(observer)
 
-        cap_records = (
-            device._status.get("capabilities_raw", []) if device._status else []
-        )
+        cap_records = device._status.get("capabilities_raw", []) if device._status else []
         snap = shadow.snapshot(cap_records=cap_records)
         _LOGGER.info(
             "field_inventory: shadow snapshot — %d populated, %d observations",
-            sum(
-                1
-                for s in snap.states.values()
-                if s.classification == CLASS_POPULATED
-            ),
+            sum(1 for s in snap.states.values() if s.classification == CLASS_POPULATED),
             len(snap.observations),
         )
 
@@ -348,20 +323,14 @@ async def _run_inventory_scan(
         # hydrated from Store at setup, or produced by an earlier scan
         # this session). ``reset_prior=True`` suppresses the diff — use
         # it after a firmware change invalidates the baseline.
-        prior_snap = (
-            None
-            if reset_prior
-            else getattr(coordinator, "inventory_prior_snapshot", None)
-        )
+        prior_snap = None if reset_prior else getattr(coordinator, "inventory_prior_snapshot", None)
         if prior_snap is not None:
             try:
                 diff_md = generate_compare_report(prior_snap, js)
                 md = f"{md}\n\n{diff_md}"
                 _LOGGER.info("field_inventory: diff section appended")
             except Exception:
-                _LOGGER.exception(
-                    "field_inventory: compare failed, continuing without diff"
-                )
+                _LOGGER.exception("field_inventory: compare failed, continuing without diff")
 
         ts_iso = js.get("meta", {}).get("timestamp", "")
 

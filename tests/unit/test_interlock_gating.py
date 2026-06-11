@@ -6,6 +6,7 @@ mode-multiplexed bit isn't misread in cool. Vacuous on our unit (no PTC ⇒
 auxiliary_heat_level reads 0); these drive the dependency value directly to
 prove the wiring end-to-end.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock

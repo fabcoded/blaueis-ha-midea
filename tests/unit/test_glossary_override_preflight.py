@@ -18,7 +18,6 @@ from custom_components.blaueis_midea._glossary_override import (
     validate_and_parse_overrides,
 )
 
-
 # ── Empty / null inputs ────────────────────────────────────────────────
 
 
@@ -61,9 +60,7 @@ fields:
 """
     parsed, affected, messages = validate_and_parse_overrides(yaml_text)
     assert parsed is not None
-    assert (
-        parsed["fields"]["control"]["screen_display"]["feature_available"] == "excluded"
-    )
+    assert parsed["fields"]["control"]["screen_display"]["feature_available"] == "excluded"
     assert "fields.control.screen_display.feature_available" in affected
     # screen_display is not currently 'excluded' in base, so no exclusion-
     # gating message. The override merely changes its tier; nothing gets
@@ -162,9 +159,7 @@ fields:
     msg = str(exc.value)
     # Should mention the schema location and what was wrong.
     assert "feature_available" in msg
-    assert (
-        "schema" in msg.lower() or "validation" in msg.lower() or "enum" in msg.lower()
-    )
+    assert "schema" in msg.lower() or "validation" in msg.lower() or "enum" in msg.lower()
 
 
 # ── Parse-status display string (config_flow helper) ───────────────────
@@ -203,9 +198,7 @@ def test_parse_status_with_warning_on_timer_override():
         _compute_override_parse_status,
     )
 
-    yaml_text = (
-        "fields:\n  control:\n    power_off_timer:\n      feature_available: always\n"
-    )
+    yaml_text = "fields:\n  control:\n    power_off_timer:\n      feature_available: always\n"
     assert _compute_override_parse_status(yaml_text) == "parse with warning (check log)"
 
 
@@ -224,10 +217,5 @@ def test_parse_status_failed_on_schema_violation():
         _compute_override_parse_status,
     )
 
-    yaml_text = (
-        "fields:\n"
-        "  control:\n"
-        "    screen_display:\n"
-        "      feature_available: bogus_enum_value\n"
-    )
+    yaml_text = "fields:\n  control:\n    screen_display:\n      feature_available: bogus_enum_value\n"
     assert _compute_override_parse_status(yaml_text) == "parse failed (check log)"

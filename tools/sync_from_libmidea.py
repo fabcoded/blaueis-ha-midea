@@ -32,21 +32,11 @@ LIBMIDEA = WORKSPACE / "blaueis-libmidea"
 VENDOR_TARGETS: list[tuple[Path, Path]] = [
     (
         LIBMIDEA / "packages" / "blaueis-core" / "src" / "blaueis" / "core",
-        REPO_ROOT
-        / "custom_components"
-        / "blaueis_midea"
-        / "lib"
-        / "blaueis"
-        / "core",
+        REPO_ROOT / "custom_components" / "blaueis_midea" / "lib" / "blaueis" / "core",
     ),
     (
         LIBMIDEA / "packages" / "blaueis-client" / "src" / "blaueis" / "client",
-        REPO_ROOT
-        / "custom_components"
-        / "blaueis_midea"
-        / "lib"
-        / "blaueis"
-        / "client",
+        REPO_ROOT / "custom_components" / "blaueis_midea" / "lib" / "blaueis" / "client",
     ),
 ]
 
@@ -129,9 +119,7 @@ def main() -> int:
         n_drift = len(only_src) + len(only_dst) + len(differs)
         if n_drift:
             drift_found = True
-            summary.append(
-                f"  {rel}: +{len(only_src)} −{len(only_dst)} ~{len(differs)}"
-            )
+            summary.append(f"  {rel}: +{len(only_src)} −{len(only_dst)} ~{len(differs)}")
             if args.check:
                 for f in only_src:
                     print(f"    + {rel}/{f}")

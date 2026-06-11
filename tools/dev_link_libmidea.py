@@ -35,7 +35,7 @@ VENDOR_TARGETS: list[tuple[Path, Path]] = [
 
 
 def status() -> int:
-    for src, dst in VENDOR_TARGETS:
+    for _src, dst in VENDOR_TARGETS:
         rel = dst.relative_to(REPO_ROOT)
         if dst.is_symlink():
             target = os.readlink(dst)

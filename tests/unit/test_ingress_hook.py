@@ -19,7 +19,6 @@ import pytest
 
 from custom_components.blaueis_midea.coordinator import BlaueisMideaCoordinator
 
-
 # ── Test harness ──────────────────────────────────────────────────────
 
 
@@ -135,7 +134,7 @@ async def test_hooks_run_concurrently_not_sequentially():
     t0 = loop.time()
     await coord._run_ingress_hooks()
     elapsed = loop.time() - t0
-    assert elapsed < 0.25, f"expected concurrent (<250ms), got {elapsed*1000:.0f}ms"
+    assert elapsed < 0.25, f"expected concurrent (<250ms), got {elapsed * 1000:.0f}ms"
 
 
 @pytest.mark.asyncio
@@ -153,7 +152,7 @@ async def test_exception_in_one_hook_isolated_from_others():
     await coord._run_ingress_hooks()
 
     assert h_good.calls == 1
-    assert h_bad.calls == 1      # called — it's the hook's internal failure
+    assert h_bad.calls == 1  # called — it's the hook's internal failure
     assert h_also_good.calls == 1
 
 

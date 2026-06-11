@@ -28,11 +28,7 @@ def interlock_states(device, gdef) -> dict | None:
     Reads only the fields this gate's ``interlocks`` reference (usually 0), so the
     cost is bounded per availability check. Values come from ``device.read`` (the
     retained decoded value — hidden/excluded deps still resolve post-decode-retention)."""
-    deps = [
-        il.get("field")
-        for il in ((gdef or {}).get("gate") or {}).get("interlocks") or []
-        if il.get("field")
-    ]
+    deps = [il.get("field") for il in ((gdef or {}).get("gate") or {}).get("interlocks") or [] if il.get("field")]
     return {d: device.read(d) for d in deps} if deps else None
 
 

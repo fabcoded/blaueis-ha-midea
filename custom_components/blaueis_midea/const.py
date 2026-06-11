@@ -34,18 +34,20 @@ PRESET_NAME_TO_FIELD = {v: k for k, v in CLIMATE_PRESET_FIELDS.items()}
 
 # Fields that trigger a climate entity state refresh.
 # Any change to these fires the _climate callback.
-CLIMATE_CALLBACK_FIELDS = frozenset({
-    "power",
-    "operating_mode",
-    "target_temperature",
-    "fan_speed",
-    "indoor_temperature",
-    "louver_swing_vertical",
-    "louver_swing_horizontal",
-    "louver_swing_angle_ud_enum",
-    "louver_swing_angle_lr_enum",
-    *CLIMATE_PRESET_FIELDS.keys(),
-})
+CLIMATE_CALLBACK_FIELDS = frozenset(
+    {
+        "power",
+        "operating_mode",
+        "target_temperature",
+        "fan_speed",
+        "indoor_temperature",
+        "louver_swing_vertical",
+        "louver_swing_horizontal",
+        "louver_swing_angle_ud_enum",
+        "louver_swing_angle_lr_enum",
+        *CLIMATE_PRESET_FIELDS.keys(),
+    }
+)
 
 # Fields consumed exclusively by the climate entity.
 # These are NOT created as standalone entities (no separate switch/sensor),
@@ -55,19 +57,21 @@ CLIMATE_CALLBACK_FIELDS = frozenset({
 # Note: power and indoor_temperature are NOT here — power has no standalone
 # switch (climate on/off handles it), but indoor_temperature IS a standalone
 # sensor in addition to being climate's current_temperature.
-CLIMATE_EXCLUSIVE_FIELDS = frozenset({
-    "operating_mode",
-    "target_temperature",
-    "fan_speed",
-    "louver_swing_vertical",
-    "louver_swing_horizontal",
-    "louver_swing_angle_ud_enum",
-    "louver_swing_angle_lr_enum",
-    *CLIMATE_PRESET_FIELDS.keys(),
-    # turbo_mode no longer backs the Turbo preset (strong_wind does); keep it
-    # climate-exclusive so the dead bit isn't surfaced as a standalone switch.
-    "turbo_mode",
-})
+CLIMATE_EXCLUSIVE_FIELDS = frozenset(
+    {
+        "operating_mode",
+        "target_temperature",
+        "fan_speed",
+        "louver_swing_vertical",
+        "louver_swing_horizontal",
+        "louver_swing_angle_ud_enum",
+        "louver_swing_angle_lr_enum",
+        *CLIMATE_PRESET_FIELDS.keys(),
+        # turbo_mode no longer backs the Turbo preset (strong_wind does); keep it
+        # climate-exclusive so the dead bit isn't surfaced as a standalone switch.
+        "turbo_mode",
+    }
+)
 
 # ── Swing & vane-position model (climate.py) ───────────────
 # Per-axis native climate enums combine oscillation ("swing") with the fixed
@@ -75,7 +79,7 @@ CLIMATE_EXCLUSIVE_FIELDS = frozenset({
 # field; the firmware enforces the exclusion and clears the sibling.
 SWING_OFF = "off"
 SWING_ON = "swing"
-SWING_ON_RAW = 3   # louver_swing_* "on" raw (0b11 in the swing bits)
+SWING_ON_RAW = 3  # louver_swing_* "on" raw (0b11 in the swing bits)
 
 # axis → {swing field, angle field}. "vertical" → swing_mode,
 # "horizontal" → swing_horizontal_mode.
@@ -96,14 +100,14 @@ POS_LABELS = {
 # writable=True/False selects the column.
 FIELD_CLASS_MAP = {
     #                       writable      read-only
-    "stateful_bool":       ("switch",     "binary_sensor"),
-    "stateful_enum":       ("select",     "sensor"),
-    "stateful_numeric":    ("number",     "sensor"),
-    "sensor":              (None,         "sensor"),
-    "binary_sensor":       ("binary_sensor", "binary_sensor"),
+    "stateful_bool": ("switch", "binary_sensor"),
+    "stateful_enum": ("select", "sensor"),
+    "stateful_numeric": ("number", "sensor"),
+    "sensor": (None, "sensor"),
+    "binary_sensor": ("binary_sensor", "binary_sensor"),
     # A trigger is a momentary, write-only command (no persistent state).
     # Writable → a one-tap Button; there is no read-only form.
-    "trigger":             ("button",     None),
+    "trigger": ("button", None),
 }
 
 # ── Follow Me Function config options ─────────────────────
@@ -119,12 +123,12 @@ FIELD_CLASS_MAP = {
 # Storage keys preserved across restarts via entry.options. Legacy keys
 # (``follow_me_function_enabled`` for old master, ``follow_me_function_armed``
 # for old engage) are migrated by ``_migrate_fmf_keys`` in __init__.py.
-CONF_FMF_CONFIGURED     = "follow_me_function_configured"
-CONF_FMF_ENABLED        = "follow_me_function_enabled"
+CONF_FMF_CONFIGURED = "follow_me_function_configured"
+CONF_FMF_ENABLED = "follow_me_function_enabled"
 CONF_FMF_GUARD_TEMP_MAX = "follow_me_function_guard_temp_max"
 CONF_FMF_GUARD_TEMP_MIN = "follow_me_function_guard_temp_min"
 CONF_FMF_SAFETY_TIMEOUT = "follow_me_function_safety_timeout"
-CONF_FMF_SENSOR         = "follow_me_function_sensor"
+CONF_FMF_SENSOR = "follow_me_function_sensor"
 
 # ── Midea operating_mode enum → HA HVACMode ────────────────
 # Single source lives in the vendored core (``ux_gating.MODE_INT_TO_NAME``),

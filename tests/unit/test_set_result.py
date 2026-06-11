@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.blaueis_midea._set_result import (
@@ -11,7 +10,6 @@ from custom_components.blaueis_midea._set_result import (
     _humanize_rejection,
     check_set_result,
 )
-
 
 # ── No-op cases ─────────────────────────────────────────────
 

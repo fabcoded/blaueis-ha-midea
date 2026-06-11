@@ -38,8 +38,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
     entities: list[ButtonEntity] = [
-        BlaueisMideaTriggerButton(coordinator, desc)
-        for desc in coordinator.get_entities_for_platform("button")
+        BlaueisMideaTriggerButton(coordinator, desc) for desc in coordinator.get_entities_for_platform("button")
     ]
     _LOGGER.debug("button platform: %d glossary trigger button(s)", len(entities))
     if entities:
@@ -55,9 +54,7 @@ class BlaueisMideaTriggerButton(ButtonEntity):
     def __init__(self, coordinator: BlaueisMideaCoordinator, desc: dict) -> None:
         self._coord = coordinator
         self._field_name = desc["field_name"]
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_{self._field_name}"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{self._field_name}"
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         self._attr_name = glossary_label_for_lang(
             gdef,

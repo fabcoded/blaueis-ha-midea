@@ -39,4 +39,17 @@ if ! python3 "$REPO_ROOT/tools/sync_from_libmidea.py" --check; then
     exit 1
 fi
 
+# Lint gate — ruff 0.11.x (config in .ruff.toml; vendored lib/ excluded).
+# Skips with a warning when ruff isn't installed locally; CI enforces it.
+if command -v ruff >/dev/null 2>&1; then
+    if ! (cd "$REPO_ROOT" && ruff check && ruff format --check); then
+        echo "" >&2
+        echo "pre-commit: ruff gate failed — fix (ruff check --fix; ruff format)" >&2
+        echo "and re-stage, or see .ruff.toml for the config." >&2
+        exit 1
+    fi
+else
+    echo "pre-commit: WARNING — ruff not installed; lint gate skipped (CI enforces it)." >&2
+fi
+
 exit 0

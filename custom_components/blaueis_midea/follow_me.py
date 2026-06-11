@@ -21,6 +21,7 @@ Naming:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 from datetime import datetime, timedelta, timezone
@@ -120,14 +121,10 @@ class BlauiesFollowMeManager:
         if temp is None:
             if not self._temp_disabled:
                 self._temp_disabled = True
-                _LOGGER.error(
-                    "Follow Me Function: sensor lost/out-of-range/stale, temporarily disabling"
-                )
+                _LOGGER.error("Follow Me Function: sensor lost/out-of-range/stale, temporarily disabling")
                 self._coord.device.clear_follow_me_shadow()
-                try:
+                with contextlib.suppress(Exception):
                     await self._coord.device.set(follow_me=False)
-                except Exception:
-                    pass
             return
 
         if self._temp_disabled:
@@ -184,7 +181,8 @@ class BlauiesFollowMeManager:
         except (ValueError, TypeError):
             _LOGGER.debug(
                 "Source sensor %s non-numeric: %s",
-                self._source_entity_id, state.state,
+                self._source_entity_id,
+                state.state,
             )
             return None
         if math.isnan(temp) or math.isinf(temp):
@@ -197,7 +195,9 @@ class BlauiesFollowMeManager:
         if temp < self._guard_temp_min or temp > self._guard_temp_max:
             _LOGGER.debug(
                 "Source temp %.1f\u00b0C outside guards [%.0f, %.0f]",
-                temp, self._guard_temp_min, self._guard_temp_max,
+                temp,
+                self._guard_temp_min,
+                self._guard_temp_max,
             )
             return None
 

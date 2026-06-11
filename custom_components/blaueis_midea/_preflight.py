@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.exceptions import ServiceValidationError
-
 from blaueis.core.validation import (
     ModeDisallowed,
     NotInEnum,
@@ -23,6 +21,7 @@ from blaueis.core.validation import (
     OutOfRange,
     validate_set,
 )
+from homeassistant.exceptions import ServiceValidationError
 
 from ._i18n import glossary_label_for_lang
 from .const import DOMAIN
@@ -148,9 +147,7 @@ def validate_or_raise(
     if not verdict.offered:
         _raise_gate_block(coord, field_name, verdict.blocked_by)
 
-    outcome = validate_set(
-        field_name, value, coord.device.status, coord.device.glossary
-    )
+    outcome = validate_set(field_name, value, coord.device.status, coord.device.glossary)
     if isinstance(outcome, Ok):
         return
 

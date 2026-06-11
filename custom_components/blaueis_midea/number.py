@@ -95,14 +95,10 @@ class BlaueisMideaSlider(NumberEntity):
         self._device = coordinator.device
         self._field_name = field_name
 
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_{field_name}_slider"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{field_name}_slider"
         ac = fmeta.get("active_constraints") or {}
         slider = ac.get("slider") or {}
-        self._attr_name = (
-            slider.get("name") or f"{field_name.replace('_', ' ').title()}"
-        )
+        self._attr_name = slider.get("name") or f"{field_name.replace('_', ' ').title()}"
 
         r = slider.get("range") or [0, 100]
         self._attr_native_min_value = float(r[0])
@@ -146,14 +142,10 @@ class BlaueisMideaSlider(NumberEntity):
         return self._coord.device_info
 
     async def async_added_to_hass(self) -> None:
-        self._coord.register_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
+        self._coord.register_entity_callback(self._field_name, self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self) -> None:
-        self._coord.unregister_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
+        self._coord.unregister_entity_callback(self._field_name, self.async_write_ha_state)
 
     @property
     def available(self) -> bool:

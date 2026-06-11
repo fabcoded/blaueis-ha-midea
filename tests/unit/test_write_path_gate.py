@@ -6,20 +6,19 @@ capability-mode → field_inactive_in_mode; runtime interlock → field_blocked_
 strong_wind gate block (visible_in_modes [cool,heat,fan_only] + an interlock on
 auxiliary_heat_level scoped to heat/auto).
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
 import pytest
-
+from blaueis.core.codec import load_glossary, walk_fields
 from homeassistant.exceptions import ServiceValidationError
 
 # Import the integration package first (its __init__ front-loads the vendored
 # `blaueis` lib path) before importing blaueis directly.
 from custom_components.blaueis_midea._preflight import validate_or_raise
 from custom_components.blaueis_midea._ux_mixin import field_ux_available
-
-from blaueis.core.codec import load_glossary, walk_fields
 
 GLOSSARY = load_glossary()
 FIELDS = walk_fields(GLOSSARY)

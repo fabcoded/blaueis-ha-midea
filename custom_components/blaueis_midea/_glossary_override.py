@@ -30,18 +30,15 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jsonschema import Draft202012Validator
-from jsonschema.exceptions import ValidationError
-
 from blaueis.core.codec import load_glossary
 from blaueis.core.glossary_override import OverrideMessage, apply_override
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
 
 _LOGGER = logging.getLogger(__name__)
 
 # Path to the schema, vendored alongside the glossary.
-_SCHEMA_PATH = (
-    Path(__file__).parent / "lib" / "blaueis" / "core" / "data" / "glossary_schema.json"
-)
+_SCHEMA_PATH = Path(__file__).parent / "lib" / "blaueis" / "core" / "data" / "glossary_schema.json"
 
 
 class GlossaryOverrideError(ValueError):
@@ -111,8 +108,7 @@ def validate_and_parse_overrides(
         return None, [], []
     if not isinstance(parsed, dict):
         raise GlossaryOverrideError(
-            f"Override must be a YAML mapping (dict) at the top level. "
-            f"Got {type(parsed).__name__}."
+            f"Override must be a YAML mapping (dict) at the top level. Got {type(parsed).__name__}."
         )
 
     # Merge against base glossary, then validate the merged result.
@@ -150,21 +146,14 @@ def validate_and_parse_overrides(
     schema = _SCHEMA
     validator = Draft202012Validator(schema)
     base_signatures = {_error_signature(e) for e in validator.iter_errors(base)}
-    new_errors = [
-        e
-        for e in validator.iter_errors(validation_target)
-        if _error_signature(e) not in base_signatures
-    ]
+    new_errors = [e for e in validator.iter_errors(validation_target) if _error_signature(e) not in base_signatures]
     new_errors.sort(key=lambda e: list(e.absolute_path))
     if new_errors:
         first = new_errors[0]
         path = ".".join(str(p) for p in first.absolute_path) or "<root>"
         msg = f"Schema validation failed at {path}: {first.message}"
         if len(new_errors) > 1:
-            msg += (
-                f"\n(plus {len(new_errors) - 1} more validation error(s) "
-                f"caused by this override)"
-            )
+            msg += f"\n(plus {len(new_errors) - 1} more validation error(s) caused by this override)"
         raise GlossaryOverrideError(msg)
 
     return parsed, affected, messages
@@ -189,8 +178,5 @@ def _format_yaml_error(err: yaml.YAMLError) -> str:
     """Render a YAML parse error with line/column when available."""
     if hasattr(err, "problem_mark") and err.problem_mark is not None:
         mark = err.problem_mark
-        return (
-            f"YAML syntax error at line {mark.line + 1}, "
-            f"column {mark.column + 1}: {err.problem or 'invalid YAML'}"
-        )
+        return f"YAML syntax error at line {mark.line + 1}, column {mark.column + 1}: {err.problem or 'invalid YAML'}"
     return f"YAML syntax error: {err}"

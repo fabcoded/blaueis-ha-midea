@@ -64,8 +64,7 @@ class FakeScheduler:
 
     def fire_due(self) -> int:
         fired = 0
-        due = [h for h in self._pending
-               if not h.cancelled and h.when <= self._clock.monotonic()]
+        due = [h for h in self._pending if not h.cancelled and h.when <= self._clock.monotonic()]
         self._pending = [h for h in self._pending if h not in due]
         for h in due:
             h.cb()
@@ -79,7 +78,10 @@ def _make_coord() -> BlaueisMideaCoordinator:
     hass = MagicMock()
     hass.loop = asyncio.get_event_loop()
     return BlaueisMideaCoordinator(
-        hass=hass, host="127.0.0.1", port=8765, psk="0" * 32,
+        hass=hass,
+        host="127.0.0.1",
+        port=8765,
+        psk="0" * 32,
     )
 
 

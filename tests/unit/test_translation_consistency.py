@@ -25,9 +25,7 @@ import yaml
 
 INTEGRATION_ROOT = Path(__file__).resolve().parents[2] / "custom_components" / "blaueis_midea"
 TRANSLATIONS_DIR = INTEGRATION_ROOT / "translations"
-GLOSSARY_PATH = (
-    INTEGRATION_ROOT / "lib" / "blaueis" / "core" / "data" / "glossary.yaml"
-)
+GLOSSARY_PATH = INTEGRATION_ROOT / "lib" / "blaueis" / "core" / "data" / "glossary.yaml"
 
 PREFLIGHT_KEYS = {
     "value_out_of_range": {"got", "min", "max", "field"},
@@ -54,9 +52,7 @@ def test_preflight_keys_present_in_lang_file(lang_file: Path) -> None:
     data = json.loads(lang_file.read_text(encoding="utf-8"))
     exceptions = data.get("exceptions") or {}
     missing = sorted(set(PREFLIGHT_KEYS) - set(exceptions))
-    assert not missing, (
-        f"{lang_file.name} missing exception keys: {missing}"
-    )
+    assert not missing, f"{lang_file.name} missing exception keys: {missing}"
 
 
 @pytest.mark.parametrize("lang_file", _all_lang_files(), ids=lambda p: p.stem)
@@ -73,13 +69,9 @@ def test_preflight_placeholders_match_in_lang_file(lang_file: Path) -> None:
         block = exceptions.get(key)
         assert isinstance(block, dict), f"{lang_file.name}:{key} not a block"
         message = block.get("message")
-        assert isinstance(message, str) and message, (
-            f"{lang_file.name}:{key} has no message"
-        )
+        assert isinstance(message, str) and message, f"{lang_file.name}:{key} has no message"
         actual = set(PLACEHOLDER_RE.findall(message))
-        assert actual == expected, (
-            f"{lang_file.name}:{key} placeholders {actual} != {expected}"
-        )
+        assert actual == expected, f"{lang_file.name}:{key} placeholders {actual} != {expected}"
 
 
 # ── glossary label_i18n / description_i18n: field-level ──────────────
@@ -90,11 +82,7 @@ def _walk_glossary_fields(node, path=()):
     or ``label_i18n``/``description_i18n``."""
     if not isinstance(node, dict):
         return
-    if (
-        "data_type" in node
-        or "label_i18n" in node
-        or "description_i18n" in node
-    ):
+    if "data_type" in node or "label_i18n" in node or "description_i18n" in node:
         yield path, node
         return
     for k, v in node.items():
@@ -147,6 +135,4 @@ def test_every_glossary_lang_has_translation_file() -> None:
                 declared.update(k for k in i18n if isinstance(k, str))
     available = {p.stem for p in _all_lang_files()}
     missing = sorted(declared - available)
-    assert not missing, (
-        f"Glossary declares languages with no translation file: {missing}"
-    )
+    assert not missing, f"Glossary declares languages with no translation file: {missing}"

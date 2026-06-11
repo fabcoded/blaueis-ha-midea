@@ -37,8 +37,9 @@ async def test_handler_is_safe_with_no_entries(hass):
     Covers the handler's early-exit branch, the most common
     developer-environment state.
     """
-    from custom_components.blaueis_midea.field_inventory import _handle_service_call
     from homeassistant.core import ServiceCall
+
+    from custom_components.blaueis_midea.field_inventory import _handle_service_call
 
     call = ServiceCall(hass, "blaueis_midea", "run_field_inventory", {"label": "ghost"})
     # No blaueis_midea entries registered → handler should noop.

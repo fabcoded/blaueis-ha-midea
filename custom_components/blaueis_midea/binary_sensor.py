@@ -35,9 +35,7 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
     def __init__(self, coordinator: BlaueisMideaCoordinator, desc: dict) -> None:
         self._coord = coordinator
         self._field_name = desc["field_name"]
-        self._attr_unique_id = (
-            f"{coordinator.host}_{coordinator.port}_{self._field_name}"
-        )
+        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{self._field_name}"
 
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         ha_meta = gdef.get("ha") or {}
@@ -67,20 +65,12 @@ class BlaueisMideaBinarySensor(BinarySensorEntity):
         self._off_behavior = off_behavior
 
     async def async_added_to_hass(self) -> None:
-        self._coord.register_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
-        self._coord.register_entity_callback(
-            "operating_mode", self.async_write_ha_state
-        )
+        self._coord.register_entity_callback(self._field_name, self.async_write_ha_state)
+        self._coord.register_entity_callback("operating_mode", self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self) -> None:
-        self._coord.unregister_entity_callback(
-            self._field_name, self.async_write_ha_state
-        )
-        self._coord.unregister_entity_callback(
-            "operating_mode", self.async_write_ha_state
-        )
+        self._coord.unregister_entity_callback(self._field_name, self.async_write_ha_state)
+        self._coord.unregister_entity_callback("operating_mode", self.async_write_ha_state)
 
     @property
     def device_info(self) -> DeviceInfo:

@@ -55,9 +55,7 @@ def mock_setup_entry():
     glossary load, scrypt stretch, and a live websocket connect that
     only fails because pytest-socket blocks it.
     """
-    with patch(
-        "custom_components.blaueis_midea.async_setup_entry", return_value=True
-    ) as mock:
+    with patch("custom_components.blaueis_midea.async_setup_entry", return_value=True) as mock:
         yield mock
 
 
@@ -65,8 +63,7 @@ def _reauth_flows(hass: HomeAssistant, entry) -> list[dict]:
     return [
         f
         for f in hass.config_entries.flow.async_progress()
-        if f["context"].get("source") == config_entries.SOURCE_REAUTH
-        and f["context"].get("entry_id") == entry.entry_id
+        if f["context"].get("source") == config_entries.SOURCE_REAUTH and f["context"].get("entry_id") == entry.entry_id
     ]
 
 
@@ -75,17 +72,13 @@ def _reauth_flows(hass: HomeAssistant, entry) -> list[dict]:
 
 async def test_user_flow_success(hass: HomeAssistant, mock_setup_entry) -> None:
     """Happy path: form → validate ok → entry created with the input."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
     assert result["errors"] == {}
 
     with patch(_VALIDATE, return_value={"title": "Blaueis AC (127.0.0.1)"}):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], USER_INPUT
-        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
         await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -109,36 +102,26 @@ async def test_user_flow_errors(
     expected_error: str,
 ) -> None:
     """Validation failures re-show the form with the mapped error key."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
 
     with patch(_VALIDATE, side_effect=side_effect):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], USER_INPUT
-        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": expected_error}
 
     # The flow recovers: a later valid submit still creates the entry.
     with patch(_VALIDATE, return_value={"title": "Blaueis AC (127.0.0.1)"}):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], USER_INPUT
-        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
         await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_user_flow_duplicate_aborts(
-    hass: HomeAssistant, mock_config_entry
-) -> None:
+async def test_user_flow_duplicate_aborts(hass: HomeAssistant, mock_config_entry) -> None:
     """A second entry for the same host:port aborts as already_configured."""
     mock_config_entry.add_to_hass(hass)
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
@@ -181,9 +164,9 @@ async def test_validate_input_maps_auth_error_to_invalid_auth(
         patch("asyncio.open_connection", _tcp_ok()),
         patch("blaueis.client.ws_client.HvacClient", return_value=client),
         patch("blaueis.core.crypto.psk_to_bytes", return_value=b"k" * 32),
+        pytest.raises(InvalidAuth),
     ):
-        with pytest.raises(InvalidAuth):
-            await validate_input(hass, dict(USER_INPUT))
+        await validate_input(hass, dict(USER_INPUT))
     client.close.assert_awaited()
 
 
@@ -194,16 +177,14 @@ async def test_validate_input_slot_pool_full_is_cannot_connect(
     transient connection problem — never invalid_auth."""
     from blaueis.core.crypto import HandshakeError
 
-    client = _client_failing_with(
-        HandshakeError("Gateway refused connection: slot_pool_full")
-    )
+    client = _client_failing_with(HandshakeError("Gateway refused connection: slot_pool_full"))
     with (
         patch("asyncio.open_connection", _tcp_ok()),
         patch("blaueis.client.ws_client.HvacClient", return_value=client),
         patch("blaueis.core.crypto.psk_to_bytes", return_value=b"k" * 32),
+        pytest.raises(CannotConnect),
     ):
-        with pytest.raises(CannotConnect):
-            await validate_input(hass, dict(USER_INPUT))
+        await validate_input(hass, dict(USER_INPUT))
     client.close.assert_awaited()
 
 
@@ -216,17 +197,15 @@ async def test_validate_input_maps_ws_failure_to_cannot_connect(
         patch("asyncio.open_connection", _tcp_ok()),
         patch("blaueis.client.ws_client.HvacClient", return_value=client),
         patch("blaueis.core.crypto.psk_to_bytes", return_value=b"k" * 32),
+        pytest.raises(CannotConnect),
     ):
-        with pytest.raises(CannotConnect):
-            await validate_input(hass, dict(USER_INPUT))
+        await validate_input(hass, dict(USER_INPUT))
 
 
 # ── Reauth ──────────────────────────────────────────────────────────────
 
 
-async def test_reauth_flow_success(
-    hass: HomeAssistant, mock_config_entry, mock_setup_entry
-) -> None:
+async def test_reauth_flow_success(hass: HomeAssistant, mock_config_entry, mock_setup_entry) -> None:
     """Reauth asks only for the PSK, updates the entry, keeps host/port."""
     mock_config_entry.add_to_hass(hass)
 
@@ -235,9 +214,7 @@ async def test_reauth_flow_success(
     assert result["step_id"] == "reauth_confirm"
 
     with patch(_VALIDATE, return_value={"title": "ignored"}) as mock_validate:
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {CONF_PSK: "new-key"}
-        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_PSK: "new-key"})
         await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.ABORT
@@ -251,18 +228,14 @@ async def test_reauth_flow_success(
     assert mock_config_entry.data[CONF_HOST] == "127.0.0.1"
 
 
-async def test_reauth_flow_wrong_psk_shows_error(
-    hass: HomeAssistant, mock_config_entry
-) -> None:
+async def test_reauth_flow_wrong_psk_shows_error(hass: HomeAssistant, mock_config_entry) -> None:
     """A still-wrong key re-shows the form; the entry stays untouched."""
     mock_config_entry.add_to_hass(hass)
     old_psk = mock_config_entry.data[CONF_PSK]
 
     result = await mock_config_entry.start_reauth_flow(hass)
     with patch(_VALIDATE, side_effect=InvalidAuth):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {CONF_PSK: "still-wrong"}
-        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_PSK: "still-wrong"})
 
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
@@ -273,9 +246,7 @@ async def test_reauth_flow_wrong_psk_shows_error(
 # ── Auth failures outside the flow ──────────────────────────────────────
 
 
-async def test_setup_entry_auth_failed_starts_reauth(
-    hass: HomeAssistant, mock_config_entry
-) -> None:
+async def test_setup_entry_auth_failed_starts_reauth(hass: HomeAssistant, mock_config_entry) -> None:
     """An AuthenticationError during setup puts the entry in SETUP_ERROR
     (no retry backoff — retrying a wrong key is pointless) and HA
     auto-creates a reauth flow. Also pins the class-identity contract:
@@ -285,8 +256,7 @@ async def test_setup_entry_auth_failed_starts_reauth(
 
     mock_config_entry.add_to_hass(hass)
     with patch(
-        "custom_components.blaueis_midea.coordinator.BlaueisMideaCoordinator"
-        ".async_start",
+        "custom_components.blaueis_midea.coordinator.BlaueisMideaCoordinator.async_start",
         AsyncMock(side_effect=AuthenticationError("PSK mismatch")),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -296,17 +266,14 @@ async def test_setup_entry_auth_failed_starts_reauth(
     assert len(_reauth_flows(hass, mock_config_entry)) == 1
 
 
-async def test_runtime_auth_failure_starts_reauth(
-    hass: HomeAssistant, mock_config_entry
-) -> None:
+async def test_runtime_auth_failure_starts_reauth(hass: HomeAssistant, mock_config_entry) -> None:
     """The runtime chain coordinator._on_auth_failed → __init__ hook →
     entry.async_start_reauth opens exactly one reauth flow (the gateway
     rotated its key while HA was connected)."""
     mock_config_entry.add_to_hass(hass)
     with (
         patch(
-            "custom_components.blaueis_midea.coordinator.BlaueisMideaCoordinator"
-            ".async_start",
+            "custom_components.blaueis_midea.coordinator.BlaueisMideaCoordinator.async_start",
             AsyncMock(),
         ),
         patch.object(hass.config_entries, "async_forward_entry_setups", AsyncMock()),

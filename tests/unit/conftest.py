@@ -32,6 +32,7 @@ _HA_MODULES = [
 for _mod in _HA_MODULES:
     sys.modules.setdefault(_mod, MagicMock())
 
+
 # HomeAssistantError must be a real exception class (MagicMock can't be raised)
 class _HomeAssistantError(Exception):
     pass

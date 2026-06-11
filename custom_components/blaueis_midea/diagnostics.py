@@ -28,9 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 _TO_REDACT = {CONF_PSK, "psk", "token", "password"}
 
 
-async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     coordinator = entry.runtime_data
     ring = getattr(coordinator, "debug_ring", None)
 

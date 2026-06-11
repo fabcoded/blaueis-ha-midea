@@ -24,9 +24,7 @@ Same shape for ``description_i18n`` / ``description``.
 from __future__ import annotations
 
 
-def glossary_label_for_lang(
-    field_def: dict | None, field_name: str, lang: str | None
-) -> str:
+def glossary_label_for_lang(field_def: dict | None, field_name: str, lang: str | None) -> str:
     """Return the user-facing label for ``field_name`` in ``lang``.
 
     Walks the four-step fallback chain documented at module level.
@@ -48,9 +46,7 @@ def glossary_label_for_lang(
     return field_name.replace("_", " ").title()
 
 
-def glossary_description_for_lang(
-    field_def: dict | None, field_name: str, lang: str | None
-) -> str | None:
+def glossary_description_for_lang(field_def: dict | None, field_name: str, lang: str | None) -> str | None:
     """Return the field's description in ``lang``, or None when no
     description is declared. Mirrors ``glossary_label_for_lang`` shape
     but returns ``None`` instead of synthesising a fallback — entities

@@ -8,7 +8,7 @@ Home Assistant custom integration for Midea ACs via a Blaueis gateway. Consumes 
 ruff check && ruff format --check
 ```
 
-Zero warnings expected.
+Zero warnings expected. Config in `.ruff.toml` (ruff 0.11.x — pinned in the CI lint job and gated by the pre-commit hook); the vendored `lib/` mirror is excluded — it is linted at its source repo.
 
 ## Tests
 

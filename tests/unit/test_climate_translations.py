@@ -23,11 +23,7 @@ from custom_components.blaueis_midea.const import (
     SWING_ON,
 )
 
-COMPONENT = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "custom_components"
-    / "blaueis_midea"
-)
+COMPONENT = pathlib.Path(__file__).resolve().parents[2] / "custom_components" / "blaueis_midea"
 TRANSLATION_KEY = "blaueis_ac"
 AXIS_ATTR = {"vertical": "swing_mode", "horizontal": "swing_horizontal_mode"}
 TRANSLATION_FILES = ["strings.json", "translations/en.json"]
@@ -66,9 +62,7 @@ def test_translation_key_matches_code():
 def test_strings_and_en_climate_blocks_identical():
     # strings.json is the source template; translations/en.json is what HA
     # actually loads. They must carry the same climate block.
-    assert _load("strings.json")["entity"]["climate"] == (
-        _load("translations/en.json")["entity"]["climate"]
-    )
+    assert _load("strings.json")["entity"]["climate"] == (_load("translations/en.json")["entity"]["climate"])
 
 
 @pytest.mark.parametrize("fname", TRANSLATION_FILES)

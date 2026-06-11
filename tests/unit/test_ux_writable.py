@@ -35,9 +35,7 @@ def _coord(
 
     coord = MagicMock()
     coord.device.field_gdef.side_effect = lambda name: fields.get(name)
-    coord.device.read.side_effect = lambda name: (
-        operating_mode_raw if name == "operating_mode" else None
-    )
+    coord.device.read.side_effect = lambda name: (operating_mode_raw if name == "operating_mode" else None)
     return coord
 
 

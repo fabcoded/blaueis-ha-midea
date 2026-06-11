@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from custom_components.blaueis_midea.sensor import BlaueisMideaSensor
 
 
@@ -30,9 +28,9 @@ def _make_sensor(gdef: dict, raw_value: int | None) -> BlaueisMideaSensor:
 
 
 ERROR_CODE_VALUES = {
-    "ok":             {"raw": 0,  "description": "OK (0)"},
+    "ok": {"raw": 0, "description": "OK (0)"},
     "ipm_protection": {"raw": 13, "description": "IPM module protection (13)"},
-    "evap_protect":   {"raw": 29, "description": "Evaporator high/low-temperature protection (29)"},
+    "evap_protect": {"raw": 29, "description": "Evaporator high/low-temperature protection (29)"},
 }
 
 
