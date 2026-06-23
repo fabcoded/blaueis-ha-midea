@@ -27,6 +27,7 @@ from .const import (
     CONF_FMF_SAFETY_TIMEOUT,
     CONF_FMF_SENSOR,
     CONF_GLOSSARY_OVERRIDES,
+    CONF_HALF_DEGREE_STEPS,
     CONF_PSK,
     DISPLAY_BUZZER_MODE_DEFAULT,
     DISPLAY_BUZZER_POLICIES,
@@ -339,6 +340,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_FMF_SAFETY_TIMEOUT,
                 default=opts.get(CONF_FMF_SAFETY_TIMEOUT, 300),
             ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
+            # Half-degree setpoint steps (default on). Always shown — not
+            # cap-gated, since the half_deg cap flag is unreliable.
+            vol.Optional(
+                CONF_HALF_DEGREE_STEPS,
+                default=opts.get(CONF_HALF_DEGREE_STEPS, True),
+            ): bool,
         }
         if cap_available:
             # Display & Buzzer mode — persisted default. The select

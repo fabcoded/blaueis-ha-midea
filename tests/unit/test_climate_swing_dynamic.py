@@ -25,7 +25,9 @@ def _entity(avail):
     coord.host, coord.port = HOST, PORT
     coord.device.available_fields = avail
     coord.device.read = lambda name: None
-    return BlaueisMideaClimate(coord)
+    entry = MagicMock()
+    entry.options = {}
+    return BlaueisMideaClimate(coord, entry)
 
 
 def test_positions_listed_when_angle_available():

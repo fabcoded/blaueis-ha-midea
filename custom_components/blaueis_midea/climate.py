@@ -17,9 +17,10 @@ different B5 data and can disagree:
 
 * Option/value sets. Each field's active_constraints (valid_set /
   valid_range / step / named values) refine the offered options.
-  hvac_modes, fan_modes and the temperature bounds are frozen setup
-  snapshots of that envelope; swing_modes and preset_modes are recomputed
-  live on every read so they always track the current mode and caps.
+  hvac_modes and fan_modes are frozen setup snapshots of that envelope;
+  swing_modes, preset_modes and the temperature bounds/step (min_temp /
+  max_temp / target_temperature_step) are recomputed live on every read so
+  they always track the current mode, caps and options.
 
 The two axes encode separately, which is a live footgun: fan_modes is
 built from active_constraints['values'], while the device write path
@@ -54,6 +55,7 @@ from ._swing import axis_mode, axis_options, axis_set_changes
 from ._ux_mixin import interlock_states
 from .const import (
     CLIMATE_PRESET_FIELDS,
+    CONF_HALF_DEGREE_STEPS,
     FAN_PRESET_TO_SPEED,
     FAN_SPEED_TO_PRESET,
     MODE_HA_TO_MIDEA,
@@ -75,7 +77,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the climate entity."""
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
-    async_add_entities([BlaueisMideaClimate(coordinator)])
+    async_add_entities([BlaueisMideaClimate(coordinator, entry)])
 
 
 class BlaueisMideaClimate(ClimateEntity):
@@ -93,9 +95,10 @@ class BlaueisMideaClimate(ClimateEntity):
     _enable_turn_on_off_backwards_compat = False
     should_poll = False
 
-    def __init__(self, coordinator: BlaueisMideaCoordinator) -> None:
+    def __init__(self, coordinator: BlaueisMideaCoordinator, entry: BlaueisMideaConfigEntry) -> None:
         self._coord = coordinator
         self._device = coordinator.device
+        self._entry = entry
 
         self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_climate"
 
@@ -172,19 +175,12 @@ class BlaueisMideaClimate(ClimateEntity):
             self._fan_name_to_raw = dict(FAN_PRESET_TO_SPEED)
             self._fan_raw_to_name = dict(FAN_SPEED_TO_PRESET)
 
-        # ── Temperature range (B5 constraints) ─────────────
-        temp_meta = avail.get("target_temperature", {})
-        constraints = temp_meta.get("active_constraints") or {}
-        valid_range = constraints.get("valid_range")
-        if valid_range and len(valid_range) == 2:
-            self._attr_min_temp = valid_range[0]
-            self._attr_max_temp = valid_range[1]
-        else:
-            self._attr_min_temp = 16.0
-            self._attr_max_temp = 30.0
-
-        step = constraints.get("step")
-        self._attr_target_temperature_step = step if step else 1.0
+        # ── Temperature range + step ───────────────────────
+        # min_temp / max_temp / target_temperature_step are LIVE properties
+        # (see below), not frozen __init__ snapshots: the B5 cap (0x25) carries
+        # the valid_range PER operating mode under active_constraints['by_mode'],
+        # and the half-degree step is a user option. Computing them live means a
+        # mode switch (or toggling the option) re-derives the right bounds/step.
 
     def _determine_hvac_modes(self) -> list[HVACMode]:
         """Determine available HVAC modes from B5 capabilities."""
@@ -241,6 +237,40 @@ class BlaueisMideaClimate(ClimateEntity):
     @property
     def target_temperature(self) -> float | None:
         return self._device.read("target_temperature")
+
+    # ── Temperature bounds + step (live) ────────────────────
+    def _active_temp_envelope(self) -> dict:
+        """The B5 cap's temperature envelope for the CURRENT operating mode.
+
+        The cap (0x25) decodes per-mode into ``active_constraints['by_mode']``
+        keyed by the Midea mode name (cool/auto/heat); other modes have no
+        entry. Returns ``{}`` when the cap is absent or the mode has none, so
+        callers fall back to the conservative 16–30 range.
+        """
+        ac = self._device.active_constraints("target_temperature") or {}
+        by_mode = ac.get("by_mode") or {}
+        mode_name = MODE_MIDEA_TO_HA.get(self._device.read("operating_mode"))
+        return by_mode.get(mode_name) or {}
+
+    @property
+    def min_temp(self) -> float:
+        vr = self._active_temp_envelope().get("valid_range")
+        return vr[0] if vr and len(vr) == 2 else 16.0
+
+    @property
+    def max_temp(self) -> float:
+        vr = self._active_temp_envelope().get("valid_range")
+        return vr[1] if vr and len(vr) == 2 else 30.0
+
+    @property
+    def target_temperature_step(self) -> float:
+        """0.5 °C steps when the user option is on (default), else 1 °C.
+
+        Driven by the option, NOT the B5 ``half_deg`` cap flag: that flag reads
+        0 on units whose firmware nonetheless honors the body[2] half bit
+        (verified live), so the cap is not load-bearing for this decision.
+        """
+        return 0.5 if self._entry.options.get(CONF_HALF_DEGREE_STEPS, True) else 1.0
 
     @property
     def current_temperature(self) -> float | None:

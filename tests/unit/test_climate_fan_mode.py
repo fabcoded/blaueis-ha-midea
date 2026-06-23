@@ -40,7 +40,9 @@ def _entity(fan_speed_read):
     coord.host, coord.port = HOST, PORT
     coord.device.available_fields = avail
     coord.device.read = lambda name: fan_speed_read if name == "fan_speed" else None
-    return BlaueisMideaClimate(coord)
+    entry = MagicMock()
+    entry.options = {}
+    return BlaueisMideaClimate(coord, entry)
 
 
 def test_custom_not_in_fan_modes():

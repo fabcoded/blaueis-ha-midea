@@ -173,6 +173,13 @@ FAN_SPEED_TO_PRESET = {v: k for k, v in DEFAULT_FAN_PRESETS.items()}
 
 CONF_DISPLAY_BUZZER_MODE = "display_buzzer_mode"
 
+# Half-degree temperature steps. Default on. The climate card adjusts the
+# setpoint in 0.5 °C steps when enabled, 1 °C when off. Driven by this option
+# rather than the B5 ``half_deg`` cap flag: that flag reads 0 on units whose
+# firmware nonetheless honors the body[2] half bit (verified live), so it is
+# not load-bearing for this decision.
+CONF_HALF_DEGREE_STEPS = "half_degree_steps"
+
 # Glossary override — multiline YAML text entered in the Configure
 # dialog's Advanced section. Stored verbatim (string), parsed on
 # every entry load. See ``_glossary_override.py`` for validation.

@@ -41,7 +41,9 @@ def _entity(mode, active=None, power=True, set_result=None, cap_values=None):
     coord.device.active_constraints = lambda name: None
     coord.device.cap_values = lambda: (cap_values or {})
     coord.device.set = AsyncMock(return_value=set_result or {"rejected": {}, "results": {}})
-    return BlaueisMideaClimate(coord)
+    entry = MagicMock()
+    entry.options = {}
+    return BlaueisMideaClimate(coord, entry)
 
 
 def test_frost_hidden_in_cool():

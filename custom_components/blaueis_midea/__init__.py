@@ -269,6 +269,10 @@ async def _async_options_updated(hass: HomeAssistant, entry: BlaueisMideaConfigE
     # the Configure dialog wouldn't propagate to either the entity UI
     # or the enforcer until the next AC state change.
     coordinator.fire_entity_callbacks("_display_buzzer_mode")
+    # Re-render the climate entity so its live target_temperature_step /
+    # min_temp / max_temp re-read the (possibly changed) half_degree_steps
+    # option. Cheap; no reload needed since those are live properties.
+    coordinator.fire_entity_callbacks("_climate")
 
     # If the glossary-override YAML changed, the patched glossary view on
     # Device is built at __init__ and is therefore stale. Reload the
