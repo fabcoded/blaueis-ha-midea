@@ -1,8 +1,33 @@
 """Climate entity for Blaueis Midea AC.
 
-Folds operating_mode, target_temperature, fan_speed, and mutually
-exclusive presets (turbo/eco/sleep/frost) into a single HA climate
-entity. All features are B5-gated — only confirmed capabilities appear.
+Folds operating_mode, target_temperature, fan_speed, and the mutually
+exclusive presets (turbo/eco/sleep/frost) into a single HA climate entity.
+
+Two independent axes decide what this entity exposes. They key off
+different B5 data and can disagree:
+
+* Feature presence (the supported_features mask). TARGET_TEMPERATURE,
+  FAN_MODE and TURN_ON/OFF are baseline — always offered, no cap check.
+  SWING_MODE, SWING_HORIZONTAL_MODE and PRESET_MODE are B5-gated: each is
+  added only when its backing field is in available_fields. B5 is additive,
+  not subtractive — a boot cap scan ESCALATES optional fields into
+  available_fields, and post-boot DEMOTIONS are frozen, so a feature
+  confirmed at boot can't silently disappear. The mask is computed once at
+  setup and not rebuilt.
+
+* Option/value sets. Each field's active_constraints (valid_set /
+  valid_range / step / named values) refine the offered options.
+  hvac_modes, fan_modes and the temperature bounds are frozen setup
+  snapshots of that envelope; swing_modes and preset_modes are recomputed
+  live on every read so they always track the current mode and caps.
+
+The two axes encode separately, which is a live footgun: fan_modes is
+built from active_constraints['values'], while the device write path
+clamps/drops a write against active_constraints['valid_set']. A unit whose
+fan cap leaves 'values' populated but 'valid_set' empty will offer fan
+speeds the write layer then silently drops — the offered list is not
+cross-checked against valid_set, and fan_modes (unlike swing/preset) is a
+frozen snapshot with no live recompute.
 """
 
 from __future__ import annotations
@@ -76,7 +101,10 @@ class BlaueisMideaClimate(ClimateEntity):
 
         avail = self._device.available_fields
 
-        # ── Supported features (B5-gated) ──────────────────
+        # ── Supported features (baseline + B5-gated) ───────
+        # These four are baseline: every unit has them, so they are offered
+        # unconditionally. The swing/preset features below are the B5-gated
+        # ones (added only when their backing field is in available_fields).
         features = (
             ClimateEntityFeature.TARGET_TEMPERATURE
             | ClimateEntityFeature.FAN_MODE
