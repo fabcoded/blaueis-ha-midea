@@ -8,3 +8,8 @@ __pycache__/
 frontend/tests/
 node_modules/
 package-lock.json
+
+# Local code-knowledge-graph output (graphify). Regenerable from source at no
+# cost, and large — never committed.
+graphify-out/
+.graphify_python
