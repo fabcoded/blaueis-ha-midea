@@ -1,0 +1,10 @@
+# Vendored libmidea mirror — graphed at its source repo, not here.
+#
+# The same exclusion .ruff.toml applies, for the same reason: this tree is a
+# build artefact, not source. Indexing it duplicates every node of the upstream
+# library, and merging that into a cross-repo graph alongside libmidea itself
+# yields two copies of the same symbols competing in every query result.
+custom_components/blaueis_midea/lib/
+
+# Graph output must never feed back into a graph.
+graphify-out/
