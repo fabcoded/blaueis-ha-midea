@@ -28,12 +28,15 @@ SENTINEL=".graphify-enabled"
 
 MODE="refresh"
 FORCE=()
-case "${1:-}" in
-    --status) MODE="status" ;;
-    --force)  FORCE=(--force) ;;
-    "")       ;;
-    *) echo "usage: $(basename "$0") [--status|--force]" >&2; exit 2 ;;
-esac
+# Parsed as a loop, not positionally. `--force --status` previously ran a full
+# forced rebuild because only $1 was inspected; --status must never build.
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --status) MODE="status"; shift ;;
+        --force)  FORCE=(--force); shift ;;
+        *) echo "usage: $(basename "$0") [--status] [--force]" >&2; exit 2 ;;
+    esac
+done
 
 # ── freshness ────────────────────────────────────────────────────────────────
 # Computed, never cached: the graph records the commit it was built from, so
@@ -67,8 +70,10 @@ except Exception:
 }
 
 if [ "$MODE" = "status" ]; then
-    report_status || true
-    exit 0
+    # Exit code carries the answer, so callers (and refresh_graphs.sh) can act on
+    # it. Previously `|| true; exit 0` made a stale or absent graph indistinguishable
+    # from a current one to anything but a human reading stdout.
+    if report_status; then exit 0; else exit 1; fi
 fi
 
 # ── opt-in gate ──────────────────────────────────────────────────────────────
@@ -104,5 +109,26 @@ trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
 
 graphify update "$ROOT" "${FORCE[@]}"
 
+# graphify leaves graph.json untouched when it detects no topology change, so
+# built_at_commit keeps the OLD commit. After a comment- or doc-only commit that
+# makes --status report POTENTIALLY OUT OF DATE forever, and --force does not
+# clear it either: the script tells you to rebuild, the rebuild runs, nothing
+# changes. Restamp it ourselves — the extraction did run against this tree.
+python3 - "$GRAPH" "$(git -C "$ROOT" rev-parse HEAD)" <<'PYSTAMP'
+import json, os, sys
+p, head = sys.argv[1], sys.argv[2]
+try:
+    g = json.load(open(p))
+except Exception:
+    sys.exit(0)
+if g.get("built_at_commit") != head:
+    g["built_at_commit"] = head
+    tmp = p + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(g, fh)
+    os.replace(tmp, p)
+    print(f"  restamped built_at_commit -> {head[:7]}")
+PYSTAMP
+
 echo
-report_status || true
+if report_status; then exit 0; else exit 1; fi
