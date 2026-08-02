@@ -69,6 +69,15 @@ So it goes stale as you commit. **Check first:**
 `--status` compares the commit the graph was built from against `HEAD`, so the
 answer is exact rather than a cached marker that can itself go stale.
 
+**Rebuilds are opt-in per checkout.** `./tools/graph_refresh.sh` does nothing
+unless `.graphify-enabled` exists at the repo root (gitignored, never committed).
+`--status` always works — it is read-only and instant.
+
+If that file is absent, treat its absence as deliberate: this working copy may be
+a deploy target, a CI runner, a bisect worktree or a throwaway clone, where
+minutes of disk churn is exactly what nobody wants. **Do not create it to get
+past the gate** — ask first.
+
 The vendored `custom_components/blaueis_midea/lib/` tree is excluded via
 `.graphifyignore`: it is a mirror of the upstream library, and indexing it here
 would duplicate every upstream symbol. Query the library's own graph for anything
