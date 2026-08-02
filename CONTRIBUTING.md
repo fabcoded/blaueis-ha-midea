@@ -21,6 +21,15 @@ Structured-provenance fields (`alt_names:` / `sources:` in the vendored `glossar
 
 Clone into `<HA config>/custom_components/blaueis_midea/` (symlink recommended for development) and restart HA.
 
+Install the git hooks once after cloning — they run the same lint and formatting gates as CI:
+
+```sh
+pip install pre-commit   # if you don't already have it
+./tools/install-hooks.sh
+```
+
+Two of the hooks guard the vendored `lib/` mirror and are only meaningful inside the development workspace. Without a sibling `blaueis-libmidea` checkout they skip with a warning rather than blocking your commit.
+
 For test-suite and lint work:
 
 ```sh
