@@ -121,10 +121,11 @@ poisoned history that looks valid hurts more.
 ## Sanity check before clicking
 
 If you want to verify the scalar matches the new unit before clicking
-Update, query the recorder DB directly:
+Update, query the recorder DB directly (substitute your own HA host and
+SSH key — never commit real values):
 
 ```bash
-ssh -i /tmp/claude-ha-ssh root@192.168.210.25 \
+ssh -i "${HA_SSH_KEY}" root@"${HA_HOST}" \
   "sqlite3 /homeassistant/home-assistant_v2.db \
    \"SELECT ts, mean, max FROM statistics_short_term \
      WHERE metadata_id = (SELECT id FROM statistics_meta \

@@ -16,8 +16,8 @@ or any artefact that leaves your machine.
 
 | Placeholder | What it is | Where you get it |
 |---|---|---|
-| `${HA_URL}` | HA base URL, e.g. `http://10.0.0.10:8123` | Your HA install. Workspace conventions for local dev are in `../AGENTS.md` ("Workspace-local dev environment"). |
-| `${HA_TOKEN}` | Long-lived API token | HA → your user profile → Security → "Long-Lived Access Tokens" → Create. Workspace dev convention stores this at the path documented in `../AGENTS.md`. **Never log, commit, or transmit this value.** |
+| `${HA_URL}` | HA base URL, e.g. `http://10.0.0.10:8123` | Your HA install. |
+| `${HA_TOKEN}` | Long-lived API token | HA → your user profile → Security → "Long-Lived Access Tokens" → Create. Store it wherever your local tooling reads it from. **Never log, commit, or transmit this value.** |
 | `${ENTRY_ID}` | Config-entry id for the Blaueis Midea integration on a specific install | One-shot lookup — see §3.1. |
 | `${DEVICE_ID}` | HA device id for the AC the integration owns | One-shot lookup — see §3.2. |
 
@@ -389,7 +389,8 @@ that path. For glossary YAML edits alone, after libmidea commit
 | Placeholder | What it is | Where it lives |
 |---|---|---|
 | `${HA_HOST}` | HA host (IP or mDNS), reached via the "Advanced SSH & Web Terminal" add-on as `root` on port 22 | Local config |
-| `${HA_SSH_KEY}` | Workspace-local OpenSSH private key authorised for `root@${HA_HOST}` | Workspace dev-env file (see `../AGENTS.md` "Workspace-local dev environment") |
+| `${HA_SSH_KEY}` | OpenSSH private key authorised for `root@${HA_HOST}` | Your local dev environment |
+| `${GW_SSH_KEY}` | OpenSSH private key for the gateway Pi (see §7.5) | Your local dev environment |
 
 **Critical permission gotcha.** Workspace files are mounted with mode
 `0777`. OpenSSH refuses to use a private key with such open
@@ -404,7 +405,7 @@ chmod 600 /tmp/ha-ssh-key
 SSH="ssh -i /tmp/ha-ssh-key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 ```
 
-The same gotcha applies to the gateway Pi key (`hvacpi.key`) —
+The same gotcha applies to the gateway Pi key (`${GW_SSH_KEY}`) —
 copy + chmod 600 before any `ssh` / `scp` invocation that uses it.
 
 ### 7.2 Deploy the integration
@@ -457,7 +458,7 @@ IP). Update flow, deploy paths, and SSH conventions are documented
 in `../blaueis-libmidea/docs/operations.md` §"Operations" and the
 "Live-gateway safety" rules in `blaueis-libmidea/AGENTS.md`.
 
-The same workspace-perms gotcha applies — copy `hvacpi.key` to
+The same workspace-perms gotcha applies — copy `${GW_SSH_KEY}` to
 `/tmp` and `chmod 600` before use. Don't trigger the gateway update
 flow without explicit per-operation approval (per the AGENTS.md
 rule).
@@ -492,11 +493,11 @@ rules before any artefact leaves the local machine:
    useful for *your* debugging but rarely needed for upstream
    reports.
 
-4. **Cross-reference the workspace AGENTS.md.** The
-   `../AGENTS.md` file at the workspace root carries the public /
-   private boundary rules that apply to any commit on a public
-   repo. Pre-commit leak scanning is mandatory for changes in this
-   repo (see "Pre-commit hygiene" section there).
+4. **Leak-scan before every commit.** Scrub instance-specific
+   values and secrets (hosts, tokens, keys) from any change before
+   committing. Pre-commit leak scanning is mandatory for changes in
+   this repo and runs via the repo's pre-commit hooks
+   (`tools/local_gate.sh`).
 
 5. **Live-gateway operations are gated.** The `../AGENTS.md`
    "Live-gateway safety" section in `blaueis-libmidea/AGENTS.md`

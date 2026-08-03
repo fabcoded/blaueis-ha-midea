@@ -9,7 +9,7 @@ async lifecycle:
   serve blobs correctly when populated directly.
 
 The full end-to-end (button-press → scan → blob → download) is exercised
-by the live-AC smoke on 192.168.210.25 — we don't duplicate that here
+by the live-AC smoke on the deployed HA instance — we don't duplicate that here
 because mocking the entire Device async stack is substantial glue for
 relatively little marginal coverage.
 """
