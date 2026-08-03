@@ -20,8 +20,10 @@ DEBUG_RING_SIZE_MB = 5
 # The "Turbo" preset drives strong_wind (body[8] bit 5) — the actionable
 # boost bit the device acts on — NOT turbo_mode (body[10] bit 1), which does
 # not engage on this hardware (the write read back as 0 → preset flip-back).
-# turbo_mode is kept hidden (CLIMATE_EXCLUSIVE_FIELDS) rather than exposed as a
-# dead standalone switch; it is still decoded/retained for gating.
+# turbo_mode is excluded in the glossary (never_observed), so it is not offered
+# here at all. A unit whose firmware does act on that bit can re-enable it via a
+# glossary override and gets its own switch — the two are different features
+# (fan-side vs compressor-side boost), so both may legitimately exist there.
 CLIMATE_PRESET_FIELDS = {
     "strong_wind": "Turbo",
     "eco_mode": "ECO",
@@ -67,9 +69,6 @@ CLIMATE_EXCLUSIVE_FIELDS = frozenset(
         "louver_swing_angle_ud_enum",
         "louver_swing_angle_lr_enum",
         *CLIMATE_PRESET_FIELDS.keys(),
-        # turbo_mode no longer backs the Turbo preset (strong_wind does); keep it
-        # climate-exclusive so the dead bit isn't surfaced as a standalone switch.
-        "turbo_mode",
     }
 )
 
