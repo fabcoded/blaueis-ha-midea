@@ -29,3 +29,15 @@ Current public docs contradict the decided 0.1.0 state in these places; all must
 - Confirm on the bench (ticket #26): CN3 photo and pitch, which CN3 pin is the AC's TX on our unit, the shifter wiring actually in use, whether CN3 pin 1 needs to be populated for the AC to talk.
 - The switches decision (ticket #20) may add a line to stage 4's "what you should see".
 - Whether `gateway.local` resolves from the HA host depends on mDNS; the draft offers the IP as the fallback.
+
+## Review round (four parallel reviewers, distinct lenses, ~1 minute)
+
+28 findings, 3 blocking — all folded into the draft (v2):
+
+- **Power sequence in the hardware stage contradicted itself** (stranger lens): the intro said "power up only after wiring", 2.1 measured with the AC on, and the UART prep needed a booted Pi. Fix: the Pi is prepared first as its own stage (OS check, serial console off, model step, reboot, checkpoint), the wiring stage states its power sequence once (measure with the AC on and nothing connected → AC off → wire → Pi first, then AC).
+- **A multimeter was required but not listed** (stranger lens): added to *Before you start*; the check now carries the mains warning the hardware reviewer asked for (DC volts, touch only the CN3 pins).
+- **PyPI packages are installed when the integration is first added, not on the post-HACS restart** (HA lens): moved to stage 5 step 1, with the internet-access note and "can take a minute"; the stage-4 checkpoint no longer misattributes a missing entry to the restart.
+
+Minor findings applied: the 300 mA rating carries no vendor attribution; "any shifter does the job" became "a BSS138-type module should work; none is verified"; `ws://<host>:8765` instead of a bind address; the Zero/3/4 checkpoint now observes `serial0 → ttyAMA0` (vs `ttyS0`); `blaueis-gw configure` is followed by a systemd restart; back-powering note when the Pi is off and the AC on; "the AC's 5 V supply pin is never used" (its data levels do reach the shifter); the hostname example is qualified with "the IP is the safe choice"; Follow Me dropped from *Next*.
+
+Fact-checker findings not applied, deliberately: the per-model current range and the multimeter check are engineering additions the maintainer stands behind; the Pi header pins 1/2/6 are the standard layout; `docs/integration.md` and `docs/operations.md` exist.
