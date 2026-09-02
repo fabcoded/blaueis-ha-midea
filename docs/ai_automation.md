@@ -493,11 +493,16 @@ rules before any artefact leaves the local machine:
    useful for *your* debugging but rarely needed for upstream
    reports.
 
-4. **Leak-scan before every commit.** Scrub instance-specific
-   values and secrets (hosts, tokens, keys) from any change before
-   committing. Pre-commit leak scanning is mandatory for changes in
-   this repo and runs via the repo's pre-commit hooks
-   (`tools/local_gate.sh`).
+4. **Leak-scan before every commit — and before every `gh` publish.**
+   Scrub instance-specific values and secrets (hosts, tokens, keys)
+   from any change before committing. Pre-commit leak scanning is
+   mandatory for changes in this repo and runs via the repo's
+   pre-commit hooks (`tools/local_gate.sh`). Text that never passes
+   through git — an issue body, PR description, comment or release
+   note handed to `gh` — gets the same treatment from a Claude Code
+   PreToolUse hook (`.claude/settings.json` → `tools/local_gate_agent.sh`).
+   Both are silent no-ops in a plain clone; they run whatever checks a
+   surrounding workspace supplies one level above the repo.
 
 5. **Live-gateway operations are gated.** The `../AGENTS.md`
    "Live-gateway safety" section in `blaueis-libmidea/AGENTS.md`
