@@ -22,6 +22,13 @@ Notable changes to the Blaueis Midea integration.
   close) stay ordinary connection errors and keep retrying.
 
 ### Fixed
+- **Stale slider numbers are now cleaned up.** The registry sweep
+  skipped every `<field>_slider` number, so a slider whose field left
+  `available_fields` survived as a permanently unavailable ghost. Sliders
+  now follow their base field: removed when the field is no longer
+  available, or when it is climate-exclusive and its cap no longer offers
+  a slider (the retired louver-angle sliders). The fan-speed slider, which
+  sits alongside the climate entity's fan-mode dropdown on purpose, is kept.
 - **Configure dialog saves without a Follow Me sensor.** The Follow Me
   source field was rendered with an empty default the entity selector
   rejects, so an entry with no sensor configured could not save the

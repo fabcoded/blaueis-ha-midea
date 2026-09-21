@@ -592,8 +592,19 @@ def _cleanup_orphaned_field_entities(
 
     1. **Field-driven entities.** Suffix matches a known glossary field
        name AND that field is not in ``available_fields`` → remove.
+       A climate-exclusive field's standalone entity is removed even
+       while the field is available (the climate entity owns it).
        Synthetic entities (suffixes that aren't glossary fields) skip
        this pass.
+
+       ``<field>_slider`` numbers are judged by their base field: removed
+       when the field is no longer in ``available_fields``, or when it is
+       climate-exclusive and its active cap no longer carries a
+       ``slider:`` block (the retired louver-angle sliders); kept
+       otherwise. A climate-exclusive field that still has a slider block
+       keeps it — the number platform builds that slider on purpose
+       (``fan_speed``: preset dropdown on the climate entity, free-range
+       slider alongside).
 
     2. **Deleted glossary fields.** Suffix is in ``_REMOVED_FIELDS``
        (or ``<removed>_slider``) → remove. Pass 1 cannot see these:
@@ -627,6 +638,31 @@ def _cleanup_orphaned_field_entities(
         if not ent.unique_id.startswith(prefix):
             continue
         suffix = ent.unique_id[len(prefix) :]
+
+        # Pass 1b: `<field>_slider` numbers follow their base field. The
+        # number platform builds a slider for any available field whose
+        # active cap carries a `slider:` block — climate-exclusive ones
+        # included (fan_speed) — so exclusivity alone must not remove it.
+        slider_base = suffix[: -len("_slider")] if suffix.endswith("_slider") else None
+        if slider_base in all_field_names:
+            if slider_base not in available:
+                reason = "no longer in available_fields"
+            elif slider_base in CLIMATE_EXCLUSIVE_FIELDS and not _has_slider_block(
+                coordinator.device.available_fields[slider_base]
+            ):
+                reason = "climate-exclusive and its cap has no slider"
+            else:
+                continue  # the number platform still builds this slider
+            _LOGGER.info(
+                "Removing orphaned slider %s (unique_id=%s) — field %r %s",
+                ent.entity_id,
+                ent.unique_id,
+                slider_base,
+                reason,
+            )
+            reg.async_remove(ent.entity_id)
+            removed += 1
+            continue
 
         # Pass 1: glossary-field-driven.
         if suffix in all_field_names:
@@ -695,6 +731,13 @@ def _cleanup_orphaned_field_entities(
             removed,
             "y" if removed == 1 else "ies",
         )
+
+
+def _has_slider_block(fmeta: dict) -> bool:
+    """True when the field's active cap advertises a slider — the same
+    test number.async_setup_entry uses to build a ``<field>_slider``."""
+    ac = fmeta.get("active_constraints") or {}
+    return isinstance(ac.get("slider"), dict)
 
 
 # ── DebugRing plumbing ─────────────────────────────────────────────────
