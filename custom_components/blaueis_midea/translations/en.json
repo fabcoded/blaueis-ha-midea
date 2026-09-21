@@ -130,5 +130,11 @@
     "field_blocked_by_feature": {
       "message": "{field} cannot be set while {blocker} is active."
     }
+  },
+  "issues": {
+    "gateway_unreachable": {
+      "title": "Blaueis gateway unreachable",
+      "description": "Home Assistant has not been able to reach the Blaueis gateway for {title} at {host}:{port} for at least {minutes} minutes. Its entities stay unavailable until the gateway answers again; Home Assistant keeps retrying on its own.\n\nCheck that the gateway is powered and on the network, that the gateway service is running, and that port {port} is reachable from Home Assistant. This issue clears itself as soon as the connection succeeds."
+    }
   }
 }

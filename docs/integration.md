@@ -366,22 +366,30 @@ come back and interrupts every other integration.
 - Firewall: `nc -zv <gateway-host> 8765` from the HA host → `cannot_connect`.
 - Wrong port: default is `8765`.
 
-### 7.2 Integration loads but no entities appear
+### 7.2 "Blaueis gateway unreachable" in Repairs
+
+When the gateway cannot be reached at setup (HA start, entry reload), the entry goes to *retrying setup* and HA retries with backoff. That alone is silent — a gateway reboot or a short network blip is not worth a notification. If the gateway is still unreachable **15 minutes** after the first failed attempt, a warning issue appears under Settings → System → Repairs, one per config entry, naming the host and port.
+
+It clears itself: the next successful setup deletes it (so does an auth failure, which proves the gateway is reachable and hands over to the reauth flow, and deleting the entry). The 15-minute clock is kept in memory, so it restarts after an HA restart, and it restarts after every successful connection. Only setup-time outages are covered — a gateway that drops out while the entry is loaded shows as unavailable entities, not as an issue.
+
+To fix, work through §7.1's `cannot_connect` causes.
+
+### 7.3 Integration loads but no entities appear
 
 - The device hasn't completed B5 discovery yet — wait ~30 s.
 - Check `homeassistant.log` filter `blaueis_midea`.
 - Download diagnostics → look for `uart_tx` with `msg_id=0xb5` and a `reply_to.confidence=="confirmed"` on the matching `uart_rx`. If no reply, the AC doesn't implement that capability query (rare).
 
-### 7.3 Entities appear but state doesn't update
+### 7.4 Entities appear but state doesn't update
 
 - Ring → look for `ws_in` events with `ctx.type=="frame"` at steady rate. If only `ws_out` (commands going in) but no `ws_in` frames, the WS subscription has gone sideways — reload the entry.
 - Check `pi_status` broadcasts (every 60 s) are arriving; if yes, connection is alive and the issue is at the AC (power off?).
 
-### 7.4 Changes to `.py` not picking up
+### 7.5 Changes to `.py` not picking up
 
 - Reload does **not** reload Python modules (HA/Python caches them). Full `ha core restart` required. This is noted in the workspace memory too.
 
-### 7.5 Slot-pool exhaustion
+### 7.6 Slot-pool exhaustion
 
 `{"code":"slot_pool_full"}` error → more than `slot_pool_size` (default 8) concurrent WS clients on the gateway. Usually a stuck test client. Close idle clients, or raise the pool in gateway config. See `../blaueis-libmidea/docs/operations.md` §3.2.
 

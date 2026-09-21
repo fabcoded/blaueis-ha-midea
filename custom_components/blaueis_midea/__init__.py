@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 # Make vendored blaueis library importable
@@ -24,6 +25,8 @@ from homeassistant.exceptions import (  # noqa: E402
     ConfigEntryAuthFailed,
     ConfigEntryNotReady,
 )
+from homeassistant.helpers import issue_registry as ir  # noqa: E402
+from homeassistant.util import dt as dt_util  # noqa: E402
 from websockets.exceptions import WebSocketException  # noqa: E402
 
 from ._glossary_override import (  # noqa: E402
@@ -117,6 +120,12 @@ _REMOVED_FIELDS: frozenset[str] = frozenset(
     }
 )
 
+# A gateway that stays unreachable through setup retries for this long gets a
+# Repairs issue (one per config entry). Shorter outages — a gateway reboot, a
+# Wi-Fi blip — stay silent: HA's retry backoff already handles them.
+GATEWAY_UNREACHABLE_ISSUE_AFTER = timedelta(minutes=15)
+GATEWAY_UNREACHABLE_ISSUE = "gateway_unreachable"
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> bool:
     """Set up Blaueis Midea AC from a config entry."""
@@ -183,6 +192,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
         # the reauth flow.
         with contextlib.suppress(Exception):
             await coordinator.device.stop()
+        # The gateway answered, so it is not unreachable — reauth takes over.
+        _clear_gateway_unreachable(hass, entry)
         raise ConfigEntryAuthFailed(f"Blaueis gateway at {host}:{port} rejected our credentials: {err}") from err
     except (HandshakeError, TimeoutError, OSError, WebSocketException) as err:
         # Gateway down/unreachable at setup time is transient — let HA
@@ -191,8 +202,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
         # malformed reply, not a credential problem.
         with contextlib.suppress(Exception):
             await coordinator.device.stop()
+        _note_gateway_unreachable(hass, entry, host, port)
         raise ConfigEntryNotReady(f"Cannot reach Blaueis gateway at {host}:{port}: {err}") from err
 
+    _clear_gateway_unreachable(hass, entry)
     entry.runtime_data = coordinator
 
     fm = coordinator.blaueis_follow_me
@@ -323,6 +336,55 @@ async def async_unload_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry
         invalidate_glossary_cache()
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> None:
+    """Drop the entry's gateway-unreachable Repairs issue, if any — an entry
+    deleted while its gateway was down would otherwise leave it behind."""
+    _clear_gateway_unreachable(hass, entry)
+
+
+# ── Gateway-unreachable Repairs issue ──────────────────────────────────
+
+
+def _gateway_issue_id(entry: BlaueisMideaConfigEntry) -> str:
+    return f"{GATEWAY_UNREACHABLE_ISSUE}_{entry.entry_id}"
+
+
+def _unreachable_since(hass: HomeAssistant) -> dict:
+    """entry_id → time of the first failed setup in the current outage.
+    In-memory only: after an HA restart the 15-minute clock starts over."""
+    return hass.data.setdefault(DOMAIN, {}).setdefault("gateway_unreachable_since", {})
+
+
+def _note_gateway_unreachable(hass: HomeAssistant, entry: BlaueisMideaConfigEntry, host: str, port: int) -> None:
+    """Record a failed setup; raise the Repairs issue once the outage has
+    lasted GATEWAY_UNREACHABLE_ISSUE_AFTER. Earlier failures stay silent."""
+    now = dt_util.utcnow()
+    since = _unreachable_since(hass).setdefault(entry.entry_id, now)
+    if now - since < GATEWAY_UNREACHABLE_ISSUE_AFTER:
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        _gateway_issue_id(entry),
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=GATEWAY_UNREACHABLE_ISSUE,
+        translation_placeholders={
+            "title": entry.title,
+            "host": str(host),
+            "port": str(port),
+            "minutes": str(int(GATEWAY_UNREACHABLE_ISSUE_AFTER.total_seconds() // 60)),
+        },
+    )
+
+
+def _clear_gateway_unreachable(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> None:
+    """End the outage: forget its start time and delete the issue (no-op
+    when neither exists)."""
+    _unreachable_since(hass).pop(entry.entry_id, None)
+    ir.async_delete_issue(hass, DOMAIN, _gateway_issue_id(entry))
 
 
 # ── Field-rename migration ─────────────────────────────────────────────
