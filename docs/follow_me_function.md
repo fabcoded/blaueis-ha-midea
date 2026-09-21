@@ -158,7 +158,7 @@ switch's `async_will_remove_from_hass` stops the FM manager); toggling
 it back on dynamically re-adds the switch via the
 `async_add_entities` callback that the switch platform stashes on the
 coordinator at setup. The `unique_id` is stable
-(`{host}_{port}_blaueis_follow_me`), so HA re-uses the same
+(`{entry_id}_blaueis_follow_me`), so HA re-uses the same
 `entity_id` across the round-trip — automations and dashboards that
 reference the entity_id stay valid as long as Configured is on when
 they fire. See `_sync_fm_switch_registration` in `__init__.py`.

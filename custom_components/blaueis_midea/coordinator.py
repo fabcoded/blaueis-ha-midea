@@ -37,12 +37,18 @@ class BlaueisMideaCoordinator:
         host: str,
         port: int,
         psk: str | bytes,
+        *,
+        entry_id: str,
         debug_ring=None,
         glossary_overrides: dict | None = None,
     ) -> None:
         self.hass = hass
         self.host = host
         self.port = port
+        # Config-entry id — the stable key of every entity unique_id
+        # (``{entry_id}_{suffix}``) and both device identifiers. Host and
+        # port are only the connection address and may change.
+        self.entry_id = entry_id
         self._psk = psk
         self.debug_ring = debug_ring
 
@@ -100,7 +106,7 @@ class BlaueisMideaCoordinator:
     def device_info(self) -> DeviceInfo:
         """Device info for the AC unit (all AC entities link here)."""
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self.host}:{self.port}_ac")},
+            identifiers={(DOMAIN, f"{self.entry_id}_ac")},
             name=self.device_name,
             manufacturer="Midea",
             model="HVAC",
@@ -112,7 +118,7 @@ class BlaueisMideaCoordinator:
         """Device info for the gateway Pi (separate device, readonly sensors)."""
         instance = self.device.gateway_info.get("instance", "")
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self.host}:{self.port}_gw")},
+            identifiers={(DOMAIN, f"{self.entry_id}_gw")},
             name=f"Blaueis Gateway ({instance or self.host})",
             manufacturer="Blaueis",
             model="Pi Gateway",

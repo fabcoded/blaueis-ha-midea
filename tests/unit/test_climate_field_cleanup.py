@@ -17,8 +17,7 @@ from unittest.mock import MagicMock
 from custom_components.blaueis_midea import _REMOVED_FIELDS, _cleanup_orphaned_field_entities
 from custom_components.blaueis_midea.const import CLIMATE_EXCLUSIVE_FIELDS
 
-HOST, PORT = "127.0.0.1", 8765
-ENTRY_ID = "entry1"
+ENTRY_ID = "01JTESTENTRYID0000000000000"
 LOUVER_FIELDS = [
     "louver_swing_vertical",
     "louver_swing_horizontal",
@@ -46,8 +45,13 @@ class _FakeRegistry:
         self.entities.pop(entity_id, None)
 
 
-def _uid(suffix, host=HOST, port=PORT):
-    return f"{host}_{port}_{suffix}"
+def _uid(suffix, prefix=f"{ENTRY_ID}_"):
+    return f"{prefix}{suffix}"
+
+
+# Not this entry's prefix: another entry's id, and the pre-migration
+# ``{host}_{port}_`` form, which only the unique_id migration may touch.
+FOREIGN_PREFIXES = ["01JOTHERENTRYID000000000000_", "127.0.0.1_8765_"]
 
 
 def _coord(available, sliders=()):
@@ -56,7 +60,7 @@ def _coord(available, sliders=()):
     from blaueis.core.codec import load_glossary
 
     c = MagicMock()
-    c.host, c.port = HOST, PORT
+    c.entry_id = ENTRY_ID
     c.device.glossary = load_glossary()
     c.device.available_fields = {
         f: ({"active_constraints": {"slider": {"range": [1, 100]}}} if f in sliders else {}) for f in available
@@ -135,7 +139,9 @@ def test_other_config_entry_untouched():
 
 
 def test_foreign_prefix_untouched():
-    reg = _FakeRegistry([_RegEntry("select.foreign", _uid("louver_swing_vertical", host="10.0.0.9"))])
+    reg = _FakeRegistry(
+        [_RegEntry(f"select.foreign_{i}", _uid("louver_swing_vertical", p)) for i, p in enumerate(FOREIGN_PREFIXES)]
+    )
     _run(reg, _coord(LOUVER_FIELDS))
     assert reg.removed == []
 
@@ -263,7 +269,7 @@ def test_slider_of_other_entry_or_prefix_untouched():
     reg = _FakeRegistry(
         [
             _RegEntry("number.other", _uid("fan_speed_slider"), config_entry_id="other-entry"),
-            _RegEntry("number.foreign", _uid("fan_speed_slider", host="10.0.0.9")),
+            _RegEntry("number.foreign", _uid("fan_speed_slider", FOREIGN_PREFIXES[1])),
         ]
     )
     _run(reg, _coord(["power"]))

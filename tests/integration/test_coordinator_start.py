@@ -35,7 +35,7 @@ _DEVICE_START = "blaueis.client.device.Device.start"
 
 @pytest.fixture
 async def coordinator(hass: HomeAssistant):
-    coordinator = BlaueisMideaCoordinator(hass, "127.0.0.1", 8765, "00" * 16)
+    coordinator = BlaueisMideaCoordinator(hass, "127.0.0.1", 8765, "00" * 16, entry_id="entry1")
     yield coordinator
     await coordinator.async_stop()
 

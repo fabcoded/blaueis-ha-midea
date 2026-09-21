@@ -33,6 +33,7 @@ def _make_coord() -> BlaueisMideaCoordinator:
         host="127.0.0.1",
         port=8765,
         psk="0" * 32,
+        entry_id="entry1",
     )
     return coord
 

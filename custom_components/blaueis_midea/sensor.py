@@ -102,7 +102,7 @@ class BlaueisMideaSensor(SensorEntity):
     def __init__(self, coordinator: BlaueisMideaCoordinator, desc: dict) -> None:
         self._coord = coordinator
         self._field_name = desc["field_name"]
-        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{self._field_name}"
+        self._attr_unique_id = f"{coordinator.entry_id}_{self._field_name}"
 
         # HA entity metadata (device_class, state_class, unit, precision,
         # display label) comes from the glossary's per-field `ha:` block
@@ -255,7 +255,7 @@ class GatewaySensor(SensorEntity):
         self._coord = coordinator
         self._stat_key = stat_key
         self._value_transform = value_transform
-        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_gw_{stat_key}"
+        self._attr_unique_id = f"{coordinator.entry_id}_gw_{stat_key}"
         self._attr_name = name
         if device_class:
             self._attr_device_class = device_class

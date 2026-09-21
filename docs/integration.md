@@ -258,10 +258,30 @@ A synthetic `select` entity (separate from glossary-derived selects) replaces th
 
 ### 4.4 Two HA devices per config entry
 
-- **AC device** (`"{host}:{port}_ac"`) — carries the climate entity + all AC sensors / switches / selects.
-- **Gateway device** (`"{host}:{port}_gw"`) — carries Pi health sensors (CPU, RAM, temp, uptime) from the gateway's `pi_status` broadcast.
+- **AC device** (`"{entry_id}_ac"`) — carries the climate entity + all AC sensors / switches / selects.
+- **Gateway device** (`"{entry_id}_gw"`) — carries Pi health sensors (CPU, RAM, temp, uptime) from the gateway's `pi_status` broadcast.
 
 This matches the physical topology: two distinct pieces of hardware, each with its own model / sw_version / configuration_url.
+
+### 4.5 Unique ids
+
+Every entity `unique_id` and both device identifiers are keyed on the
+**config-entry id**, not on the gateway's address — host and port are only
+where to connect, and the AC reports no usable serial number that could
+serve instead:
+
+| What | `unique_id` / identifier |
+|---|---|
+| Glossary-field entity | `{entry_id}_{field}` |
+| Slider number | `{entry_id}_{field}_slider` |
+| Climate entity | `{entry_id}_climate` |
+| Gateway health sensor | `{entry_id}_gw_{stat}` |
+| Synthetic entities | `{entry_id}_display_buzzer_mode`, `{entry_id}_blaueis_follow_me` |
+| Devices | `{entry_id}_ac`, `{entry_id}_gw` |
+
+The orphan sweep (`_cleanup_orphaned_field_entities`) and every other
+consumer of the prefix match on `{entry_id}_`; an entity of this entry
+with any other prefix is left alone.
 
 ---
 

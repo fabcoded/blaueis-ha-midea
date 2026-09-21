@@ -54,7 +54,7 @@ class BlaueisMideaTriggerButton(ButtonEntity):
     def __init__(self, coordinator: BlaueisMideaCoordinator, desc: dict) -> None:
         self._coord = coordinator
         self._field_name = desc["field_name"]
-        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{self._field_name}"
+        self._attr_unique_id = f"{coordinator.entry_id}_{self._field_name}"
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         self._attr_name = glossary_label_for_lang(
             gdef,

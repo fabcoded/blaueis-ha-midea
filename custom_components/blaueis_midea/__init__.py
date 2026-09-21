@@ -184,6 +184,7 @@ async def _async_setup_connected(
         host,
         port,
         psk,
+        entry_id=entry.entry_id,
         debug_ring=debug_ring,
         glossary_overrides=glossary_overrides,
     )
@@ -690,7 +691,7 @@ def _sync_fm_switch_registration(
     from .switch import BlauiesFollowMeSwitch
 
     reg = er.async_get(hass)
-    unique_id = f"{coordinator.host}_{coordinator.port}_blaueis_follow_me"
+    unique_id = f"{coordinator.entry_id}_blaueis_follow_me"
     ent_id = reg.async_get_entity_id("switch", DOMAIN, unique_id)
     configured = entry.options.get(CONF_FMF_CONFIGURED, False)
 
@@ -759,7 +760,7 @@ def _cleanup_orphaned_field_entities(
       2. Walk the HA entity registry for entries owned by this config
          entry.
       3. For each entry, extract the candidate field name from the
-         ``unique_id`` suffix (after ``{host}_{port}_``).
+         ``unique_id`` suffix (after ``{entry_id}_``).
       4. If the suffix is a known glossary field name AND that field is
          NOT in ``available_fields``, remove the entity from the registry.
 
@@ -804,7 +805,7 @@ def _cleanup_orphaned_field_entities(
     all_field_names = set(walk_fields(coordinator.device.glossary).keys())
     available = set(coordinator.device.available_fields.keys())
 
-    prefix = f"{coordinator.host}_{coordinator.port}_"
+    prefix = f"{coordinator.entry_id}_"
     reg = er.async_get(hass)
     removed = 0
     for ent in list(reg.entities.values()):

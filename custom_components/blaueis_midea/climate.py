@@ -100,7 +100,7 @@ class BlaueisMideaClimate(ClimateEntity):
         self._device = coordinator.device
         self._entry = entry
 
-        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_climate"
+        self._attr_unique_id = f"{coordinator.entry_id}_climate"
 
         avail = self._device.available_fields
 

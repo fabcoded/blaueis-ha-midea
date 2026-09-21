@@ -95,7 +95,7 @@ class BlaueisMideaSlider(NumberEntity):
         self._device = coordinator.device
         self._field_name = field_name
 
-        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{field_name}_slider"
+        self._attr_unique_id = f"{coordinator.entry_id}_{field_name}_slider"
         ac = fmeta.get("active_constraints") or {}
         slider = ac.get("slider") or {}
         self._attr_name = slider.get("name") or f"{field_name.replace('_', ' ').title()}"

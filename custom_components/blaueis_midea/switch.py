@@ -62,7 +62,7 @@ class BlaueisMideaSwitch(SwitchEntity):
         self._coord = coordinator
         self._entry = entry
         self._field_name = desc["field_name"]
-        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_{self._field_name}"
+        self._attr_unique_id = f"{coordinator.entry_id}_{self._field_name}"
 
         gdef = coordinator.device.field_gdef(self._field_name) or {}
         self._attr_name = glossary_label_for_lang(
@@ -141,7 +141,7 @@ class BlauiesFollowMeSwitch(SwitchEntity):
     ) -> None:
         self._coord = coordinator
         self._entry = entry
-        self._attr_unique_id = f"{coordinator.host}_{coordinator.port}_blaueis_follow_me"
+        self._attr_unique_id = f"{coordinator.entry_id}_blaueis_follow_me"
 
     async def async_added_to_hass(self) -> None:
         # Clear any stale hidden_by carried over from earlier versions

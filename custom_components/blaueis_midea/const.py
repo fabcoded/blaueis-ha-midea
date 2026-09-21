@@ -192,7 +192,7 @@ CONF_GLOSSARY_OVERRIDES = "glossary_overrides_yaml"
 # but which still depend on one or more glossary fields being in
 # ``available_fields`` to make sense.
 #
-# The key is the unique_id suffix (after ``{host}_{port}_``); the
+# The key is the unique_id suffix (after ``{entry_id}_``); the
 # value is the set of glossary field names the entity needs. If ANY of
 # the required fields is missing from ``available_fields``, the entity
 # is removed from the HA registry on next setup. Empty set means "no
