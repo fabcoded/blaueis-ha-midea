@@ -9,7 +9,9 @@ Notable changes to the Blaueis Midea integration.
   Every entity `unique_id` is now `{entry_id}_{suffix}` and the two
   devices are `{entry_id}_ac` / `{entry_id}_gw`, so a changed host or
   port can no longer produce a duplicate device with fresh entities.
-  See `docs/integration.md` §4.5.
+  Existing installs migrate in place on the first setup after the update:
+  entity ids, names, settings, history and both devices are kept, and
+  nothing changes in the UI. See `docs/integration.md` §4.5.
 - **BREAKING: session protocol v2.** The vendored library now speaks
   protocol v2 (direction-separated encryption keys and nonces, scrypt
   PSK stretching, key confirmation during connect, gateway pre-auth

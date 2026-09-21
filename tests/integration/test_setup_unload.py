@@ -51,7 +51,8 @@ _DEVICE_STOP = "blaueis.client.device.Device.stop"
 _FM_START = "custom_components.blaueis_midea.follow_me.BlauiesFollowMeManager.async_start"
 _SWEEP = "custom_components.blaueis_midea._cleanup_orphaned_field_entities"
 
-PREFIX = "127.0.0.1_8765_"
+# The pre-migration unique_id prefix of the mock entry ({host}_{port}_).
+OLD_PREFIX = "127.0.0.1_8765_"
 SENSOR_ENTITY = "sensor.living_room_temperature"
 
 
@@ -289,14 +290,20 @@ async def test_setup_unload_setup_cycle(hass: HomeAssistant, mock_config_entry) 
 # ── Field-rename unique_id migration ───────────────────────────────────
 
 
-def _register(hass: HomeAssistant, entry, domain: str, suffix: str, object_id: str) -> er.RegistryEntry:
+def _register(
+    hass: HomeAssistant, entry, domain: str, suffix: str, object_id: str, prefix: str | None = None
+) -> er.RegistryEntry:
     return er.async_get(hass).async_get_or_create(
         domain,
         DOMAIN,
-        f"{PREFIX}{suffix}",
+        f"{_prefix(entry) if prefix is None else prefix}{suffix}",
         config_entry=entry,
         suggested_object_id=object_id,
     )
+
+
+def _prefix(entry) -> str:
+    return f"{entry.entry_id}_"
 
 
 def _uid_of(hass: HomeAssistant, entity_id: str) -> str:
@@ -313,7 +320,7 @@ async def test_every_rename_rewrites_the_unique_id_in_place(
     integration._migrate_renamed_unique_ids(hass, mock_config_entry)
 
     # Same entity_id (history, dashboards, automations keep working).
-    assert _uid_of(hass, ent.entity_id) == f"{PREFIX}{new}"
+    assert _uid_of(hass, ent.entity_id) == f"{_prefix(mock_config_entry)}{new}"
 
 
 async def test_migration_leaves_other_entries_and_current_names_alone(hass: HomeAssistant, mock_config_entry) -> None:
@@ -328,9 +335,9 @@ async def test_migration_leaves_other_entries_and_current_names_alone(hass: Home
 
     integration._migrate_renamed_unique_ids(hass, mock_config_entry)
 
-    assert _uid_of(hass, foreign.entity_id) == f"{PREFIX}ptc_heater"
-    assert _uid_of(hass, current.entity_id) == f"{PREFIX}power_total_kwh"
-    assert _uid_of(hass, unrelated.entity_id) == f"{PREFIX}indoor_temperature"
+    assert _uid_of(hass, foreign.entity_id) == f"{_prefix(other)}ptc_heater"
+    assert _uid_of(hass, current.entity_id) == f"{_prefix(mock_config_entry)}power_total_kwh"
+    assert _uid_of(hass, unrelated.entity_id) == f"{_prefix(mock_config_entry)}indoor_temperature"
 
 
 async def test_migration_is_idempotent_and_does_not_chain(hass: HomeAssistant, mock_config_entry) -> None:
@@ -342,7 +349,7 @@ async def test_migration_is_idempotent_and_does_not_chain(hass: HomeAssistant, m
     integration._migrate_renamed_unique_ids(hass, mock_config_entry)
     integration._migrate_renamed_unique_ids(hass, mock_config_entry)
 
-    assert _uid_of(hass, ent.entity_id) == f"{PREFIX}breeze_away"
+    assert _uid_of(hass, ent.entity_id) == f"{_prefix(mock_config_entry)}breeze_away"
 
 
 async def test_rename_targets_are_not_themselves_renamed() -> None:
@@ -365,20 +372,21 @@ async def test_migration_tolerates_an_existing_target(hass: HomeAssistant, mock_
 
     reg = er.async_get(hass)
     assert reg.async_get(stale.entity_id) is None
-    assert _uid_of(hass, current.entity_id) == f"{PREFIX}power_total_kwh"
+    assert _uid_of(hass, current.entity_id) == f"{_prefix(mock_config_entry)}power_total_kwh"
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "stale duplicate" in r.message]
     assert len(warnings) == 1
 
 
 async def test_setup_runs_the_migration(hass: HomeAssistant, mock_config_entry) -> None:
-    """The migration is wired into async_setup_entry (the orphan sweep that
-    follows it is patched out: with no caps discovered it would remove the
-    migrated entity, which is correct but not what this test is about)."""
+    """The migration is wired into async_setup_entry, after the host:port →
+    entry-id prefix migration (the orphan sweep that follows it is patched
+    out: with no caps discovered it would remove the migrated entity, which
+    is correct but not what this test is about)."""
     mock_config_entry.add_to_hass(hass)
-    ent = _register(hass, mock_config_entry, "sensor", "realtime_power_kw", "ac_power")
+    ent = _register(hass, mock_config_entry, "sensor", "realtime_power_kw", "ac_power", prefix=OLD_PREFIX)
 
     with patch(_SWEEP):
         await _setup(hass, mock_config_entry)
 
     assert mock_config_entry.state is ConfigEntryState.LOADED
-    assert _uid_of(hass, ent.entity_id) == f"{PREFIX}power_realtime_kw"
+    assert _uid_of(hass, ent.entity_id) == f"{_prefix(mock_config_entry)}power_realtime_kw"

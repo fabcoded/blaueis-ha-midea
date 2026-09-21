@@ -146,6 +146,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
     # accepts the pre-derived bytes and skips its own derivation.
     psk = await hass.async_add_executor_job(psk_to_bytes, psk) if psk else psk
 
+    # Prefix first: the field renames match on the suffix and must see the
+    # entry-id form the platforms will look up.
+    _migrate_to_entry_id_prefix(hass, entry)
     _migrate_renamed_unique_ids(hass, entry)
     _migrate_display_buzzer_options(hass, entry)
     _migrate_fmf_keys(hass, entry)
@@ -472,6 +475,86 @@ def _arm_outage_timer(
         _arm_outage_timer(hass, entry, host, port, max(rest, timedelta(seconds=1)))
 
     _outage_timers(hass)[entry.entry_id] = async_call_later(hass, delay, _fire)
+
+
+# ── host:port → entry-id migration ─────────────────────────────────────
+
+
+def _migrate_to_entry_id_prefix(
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
+) -> None:
+    """Move this entry's registry ids from the gateway address to the
+    config-entry id, in place.
+
+    Entities: every unique_id of this entry that starts with the old
+    ``{host}_{port}_`` prefix is rewritten to ``{entry_id}_`` + the same
+    suffix. Devices: ``{host}:{port}_ac`` / ``_gw`` become
+    ``{entry_id}_ac`` / ``_gw``. Both are updated in place, so entity_ids,
+    names, registry options, history, areas and automations survive.
+
+    Collisions (the new id is already registered — e.g. an older version
+    ran again after this migration): the holder of the new id is kept. A
+    stale entity is removed (``_rewrite_unique_id``); a stale device first
+    hands its entities to the kept device, then drops this entry.
+
+    Runs on every setup before the platforms load. Idempotent: a no-op
+    once nothing carries the old prefix. The old ``host``/``port`` form is
+    matched here and nowhere else.
+    """
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    host, port = entry.data[CONF_HOST], entry.data[CONF_PORT]
+    old_prefix = f"{host}_{port}_"
+    new_prefix = f"{entry.entry_id}_"
+
+    ent_reg = er.async_get(hass)
+    rewritten = dropped = 0
+    for ent in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
+        if not ent.unique_id.startswith(old_prefix):
+            continue
+        if _rewrite_unique_id(ent_reg, ent, new_prefix + ent.unique_id[len(old_prefix) :]):
+            rewritten += 1
+        else:
+            dropped += 1
+
+    dev_reg = dr.async_get(hass)
+    rekeyed = merged = 0
+    for kind in ("ac", "gw"):
+        old_ident = (DOMAIN, f"{host}:{port}_{kind}")
+        new_ident = (DOMAIN, f"{entry.entry_id}_{kind}")
+        old = dev_reg.async_get_device(identifiers={old_ident})
+        if old is None or entry.entry_id not in old.config_entries:
+            continue
+        kept = dev_reg.async_get_device(identifiers={new_ident})
+        if kept is None:
+            dev_reg.async_update_device(old.id, new_identifiers=(old.identifiers - {old_ident}) | {new_ident})
+            rekeyed += 1
+            continue
+        _LOGGER.warning(
+            "unique_id migration: device %s (%s) is a stale duplicate of %s (%s) — moving its entities and removing it",
+            old.id,
+            old_ident[1],
+            kept.id,
+            new_ident[1],
+        )
+        for ent in er.async_entries_for_device(ent_reg, old.id, include_disabled_entities=True):
+            ent_reg.async_update_entity(ent.entity_id, device_id=kept.id)
+        dev_reg.async_update_device(old.id, remove_config_entry_id=entry.entry_id)
+        merged += 1
+
+    if rewritten or dropped or rekeyed or merged:
+        _LOGGER.info(
+            "unique_id migration %s → %s: %d entities rewritten, %d stale entities removed, "
+            "%d devices re-keyed, %d stale devices merged",
+            old_prefix,
+            new_prefix,
+            rewritten,
+            dropped,
+            rekeyed,
+            merged,
+        )
 
 
 # ── Field-rename migration ─────────────────────────────────────────────

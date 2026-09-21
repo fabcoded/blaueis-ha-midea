@@ -283,6 +283,29 @@ The orphan sweep (`_cleanup_orphaned_field_entities`) and every other
 consumer of the prefix match on `{entry_id}_`; an entity of this entry
 with any other prefix is left alone.
 
+**Migration from the `host:port` form.** Installs from before this scheme
+used `{host}_{port}_{suffix}` unique_ids and `{host}:{port}_ac` / `_gw`
+device identifiers. On every setup, before the platforms load,
+`_migrate_to_entry_id_prefix` rewrites them in place:
+
+- each entity of this config entry whose unique_id starts with the old
+  `{host}_{port}_` prefix gets `{entry_id}_` + the same suffix;
+- both devices get their new identifier.
+
+Entity ids, names, registry options, history, areas, dashboards and
+automations survive, because the registry entries are updated rather than
+recreated. The field-rename migration (`_FIELD_RENAMES`) runs right after,
+on the new ids. If the new id is already taken — e.g. an older version ran
+again after the migration and created its own set — the holder of the new
+id is kept: the stale entity is removed, the stale device hands its
+entities to the kept device and is removed, and a warning is logged. The
+migration is idempotent: once nothing carries the old prefix it does
+nothing and logs nothing; otherwise it logs a one-line summary
+(`unique_id migration … → …: N entities rewritten, …`). It matches the
+host and port currently stored in the config entry, which are the ones
+the old ids were built from (there is no reconfigure flow that could have
+changed them).
+
 ---
 
 ## 5. Flight recorder — the debugging path
