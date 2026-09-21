@@ -10,6 +10,10 @@ Notable changes to the Blaueis Midea integration.
   PSK stretching, key confirmation during connect, gateway pre-auth
   connection cap). A v2 integration cannot talk to a v1 gateway —
   update the gateway and the integration together.
+- **License changed from CC0 to the MIT License.** The repository was
+  previously dedicated to the public domain; it is now distributed
+  under MIT, which requires keeping the copyright and license notice
+  in copies and derivative works.
 
 ### Added
 - **Repairs issue when the gateway stays unreachable.** If setup keeps
