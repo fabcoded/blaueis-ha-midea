@@ -84,8 +84,8 @@ SCHEMA_VIOLATING_OVERRIDE = "fields:\n  control:\n    screen_display:\n      fea
 
 # The Follow Me source field is an EntitySelector, which validates what
 # it is given. The entity need not exist — only the id and the domain
-# are checked — but it may not be empty; see
-# test_save_without_a_follow_me_sensor_is_impossible.
+# are checked — but it may not be empty: with no sensor configured the
+# key is left out instead; see test_save_without_a_follow_me_sensor.
 SENSOR_ENTITY = "sensor.living_room_temperature"
 
 
@@ -257,39 +257,43 @@ async def test_valid_override_saves(hass: HomeAssistant, mock_config_entry, mock
     assert mock_config_entry.options[CONF_FMF_SAFETY_TIMEOUT] == 600
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Bug: the Follow Me source field renders default='' when no sensor is "
-        "configured, but EntitySelector rejects '' — so a fresh entry cannot "
-        "save the Configure form at all until a sensor is picked."
-    ),
-)
-async def test_save_without_a_follow_me_sensor_is_impossible(
-    hass: HomeAssistant, mock_config_entry, mock_setup_entry
-) -> None:
-    """A fresh entry has no `follow_me_function_sensor`, so the form
-    renders that field with default "". Submitting it — whether the
-    client echoes the "" back or omits the key and lets voluptuous
-    substitute the default — fails EntitySelector validation before the
-    handler is ever reached, which locks the user out of every other
-    setting in the dialog.
-
-    Pinned as a failing test rather than fixed here: the fix is an
-    integration change (an empty-tolerant wrapper on the selector, or
-    dropping the field from the schema when unset), and this task does
-    not change behaviour.
+async def test_save_without_a_follow_me_sensor(hass: HomeAssistant, mock_config_entry, mock_setup_entry) -> None:
+    """A fresh entry has no `follow_me_function_sensor`. The field then
+    renders with no default (EntitySelector rejects "", so a "" default
+    would fail every submit), an untouched field is absent from the
+    submission, and the rest of the dialog saves. The stored options keep
+    their shape: still no sensor key.
     """
     mock_config_entry.add_to_hass(hass)
     assert CONF_FMF_SENSOR not in mock_config_entry.options
 
     result = await _open_options(hass, mock_config_entry)
-    assert _schema_defaults(result["data_schema"])[CONF_FMF_SENSOR] == ""
+    assert CONF_FMF_SENSOR in {str(k) for k in result["data_schema"].schema}
+    assert CONF_FMF_SENSOR not in _schema_defaults(result["data_schema"])
 
-    result = await hass.config_entries.options.async_configure(result["flow_id"], _form_input(**{CONF_FMF_SENSOR: ""}))
+    payload = _form_input(**{CONF_FMF_SAFETY_TIMEOUT: 900})
+    payload.pop(CONF_FMF_SENSOR)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], payload)
     await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.options[CONF_FMF_SAFETY_TIMEOUT] == 900
+    assert CONF_FMF_SENSOR not in mock_config_entry.options
+
+
+async def test_follow_me_sensor_can_be_picked_on_a_fresh_entry(
+    hass: HomeAssistant, mock_config_entry, mock_setup_entry
+) -> None:
+    """Dropping the default must not drop the field: a sensor can still be
+    chosen on an entry that had none."""
+    mock_config_entry.add_to_hass(hass)
+
+    result = await _open_options(hass, mock_config_entry)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], _form_input())
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.options[CONF_FMF_SENSOR] == SENSOR_ENTITY
 
 
 async def test_invalid_override_reshows_form_with_error(

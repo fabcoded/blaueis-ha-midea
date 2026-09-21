@@ -22,6 +22,11 @@ Notable changes to the Blaueis Midea integration.
   close) stay ordinary connection errors and keep retrying.
 
 ### Fixed
+- **Configure dialog saves without a Follow Me sensor.** The Follow Me
+  source field was rendered with an empty default the entity selector
+  rejects, so an entry with no sensor configured could not save the
+  dialog at all — not even a glossary override. The field now has no
+  default until a sensor is picked; leaving it untouched keeps it unset.
 - **Entities of deleted glossary fields are now cleaned up.** The
   registry sweep only recognised fields still present in the glossary,
   so an entity whose field had been removed outright (`run_status`,

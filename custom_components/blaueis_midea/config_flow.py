@@ -319,10 +319,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_FMF_ENABLED,
                 default=opts.get(CONF_FMF_ENABLED, False),
             ): bool,
-            vol.Optional(
-                CONF_FMF_SENSOR,
-                default=opts.get(CONF_FMF_SENSOR, ""),
-            ): selector.EntitySelector(
+            # No default when no sensor is stored: EntitySelector rejects
+            # "" and None, so a "" default would fail validation on every
+            # submit (echoed back or substituted for an omitted key) and
+            # lock the whole dialog. Without a default an untouched field
+            # is simply absent from user_input and the merge below leaves
+            # the stored options without the key, as before.
+            _fmf_sensor_key(opts.get(CONF_FMF_SENSOR)): selector.EntitySelector(
                 selector.EntitySelectorConfig(
                     domain="sensor",
                     device_class="temperature",
@@ -448,6 +451,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             errors=errors or {},
             description_placeholders=placeholders,
         )
+
+
+def _fmf_sensor_key(stored: str | None) -> vol.Optional:
+    """Schema key for the Follow Me source field: defaulted to the stored
+    entity id when there is one, default-less otherwise."""
+    if stored:
+        return vol.Optional(CONF_FMF_SENSOR, default=stored)
+    return vol.Optional(CONF_FMF_SENSOR)
 
 
 def _compute_override_parse_status(yaml_text: str) -> str:
