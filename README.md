@@ -7,6 +7,15 @@ Blaueis gateway (Raspberry Pi).
 [blaueis-libmidea](https://github.com/fabcoded/blaueis-libmidea) gateway on
 your network.
 
+## Quick start
+
+New to Blaueis Midea? The [**QUICKSTART**](https://github.com/fabcoded/blaueis-ha-midea/blob/main/QUICKSTART.md) walks through everything end to end:
+
+- **Wire** the AC's dongle port to a Raspberry Pi through a level shifter.
+- **Install the gateway** on the Pi with the one-line installer and setup wizard.
+- **Add the integration** in Home Assistant through HACS.
+- **Connect** — enter the Pi's address and PSK, and the AC becomes a climate entity.
+
 ## What you get
 
 A single config entry per gateway produces **two HA devices**:
@@ -64,21 +73,15 @@ by default to keep the UI clean.
 
 ## Install
 
-**HACS** (preferred, once published): add as a custom source, install
-**Blaueis Midea AC**, restart HA.
-
-**Manual:**
-
-```sh
-cd /config/custom_components
-git clone https://github.com/fabcoded/blaueis-ha-midea.git _tmp
-cp -r _tmp/custom_components/blaueis_midea ./
-rm -rf _tmp
-# restart HA
-```
+1. **HACS → ⋮ → Custom repositories.** Add `https://github.com/fabcoded/blaueis-ha-midea`, type **Integration**.
+2. Search **Blaueis Midea AC** and download it.
+3. **Restart Home Assistant.**
 
 Then **Settings → Devices & Services → Add Integration → Blaueis Midea AC**,
-enter host / port / PSK (matching the gateway's `gateway.yaml:psk`).
+enter host / port / PSK.
+
+Manual (non-HACS) installation is covered in
+[docs/integration.md](docs/integration.md#2-install).
 
 ## Architecture
 
