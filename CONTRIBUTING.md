@@ -37,7 +37,20 @@ ruff check && ruff format --check
 python3 -m pytest
 ```
 
-Tests must stay green (123 currently).
+Tests must stay green (360 passing + 1 `xfail` currently). The suite has
+two halves, and CI runs both on every PR:
+
+```sh
+python3 -m pytest tests/unit -m "not integration"   # mocked HA, fast
+python3 -m pytest tests/integration -m integration  # real HA event loop
+```
+
+The integration half needs `pytest-homeassistant-custom-component`
+(plus `jsonschema websockets pyyaml cryptography`, mirroring
+`manifest.json`) and drives the config flow and options flow on Home
+Assistant's own flow engine. The `integration` marker is applied to
+every test in `tests/integration/` by that directory's `conftest.py` —
+don't add it per module.
 
 ## Home Assistant–specific reminders
 

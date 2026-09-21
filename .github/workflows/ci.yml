@@ -42,6 +42,18 @@ jobs:
           pip install pytest-homeassistant-custom-component jsonschema \
                       websockets pyyaml cryptography
       - name: Run unit tests
-        # Integration tests (-m integration) spin up a real HA event loop and are
-        # intentionally excluded from the fast PR gate.
+        # The fast half: mocked HA, no event loop. The -m filter keeps this
+        # step to the unit suite even if an integration-marked test is ever
+        # added under tests/unit.
         run: python -m pytest tests/unit -m "not integration"
+      - name: Run integration tests
+        # The other half, and a real gate rather than a local-only one: these
+        # drive the config flow and the options flow on HA's own flow engine
+        # (a real event loop via pytest-homeassistant-custom-component). They
+        # are slower than the unit suite but still seconds, so there is no
+        # reason to keep them out of the PR gate — an unexercised config flow
+        # is exactly the kind of thing that breaks silently on an HA bump.
+        # The `integration` marker is applied to the whole directory from
+        # tests/integration/conftest.py, so a new file there is gated the
+        # moment it lands.
+        run: python -m pytest tests/integration -m integration

@@ -63,6 +63,27 @@ CAP_0x16_0_RECORDS = [
 ]
 
 
+def pytest_collection_modifyitems(items) -> None:
+    """Apply the ``integration`` marker to everything in this directory.
+
+    The marker is what ``-m integration`` / ``-m "not integration"``
+    select on, but the real criterion is directory membership: every
+    test here needs the phcc ``hass`` fixture and a real HA event loop.
+    Applying it from this conftest rather than per-module means a new
+    test file cannot silently escape the selector by forgetting the
+    ``pytestmark`` line — which is what let the whole directory sit
+    outside the ``-m integration`` selection until now.
+
+    The hook is a session-level one, so ``items`` is the full collection
+    (unit tests included); filter by path.
+    """
+    here = str(Path(__file__).resolve().parent)
+    for item in items:
+        path = getattr(item, "path", None)
+        if path is not None and str(path).startswith(here):
+            item.add_marker(pytest.mark.integration)
+
+
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Without this fixture, HA refuses to load custom_components/*.

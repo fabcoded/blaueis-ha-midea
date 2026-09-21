@@ -211,7 +211,9 @@ async def submit_override(ws, entry_id: str, yaml_text: str, msg_id_start: int =
         "user_input": {
             "follow_me_function_configured": False,
             "follow_me_function_enabled": False,
-            "follow_me_function_sensor": "",
+            # Known bug: "" is rejected here (see below) — pass the
+            # stored entity id, or a real sensor.* id.
+            "follow_me_function_sensor": "sensor.some_temperature",
             "follow_me_function_guard_temp_min": -15.0,
             "follow_me_function_guard_temp_max": 40.0,
             "follow_me_function_safety_timeout": 300,
@@ -236,6 +238,17 @@ The integration's parse-status field (`override_parse_status_display`)
 is a read-only display: server-side it's popped from `user_input` and
 recomputed from the *stored* YAML on every form render. You don't need
 to populate it on submit.
+
+**`follow_me_function_sensor` cannot be empty — known bug.** The field
+is an `EntitySelector`, which rejects `""` (and `None`) as "neither a
+valid entity ID nor a valid UUID". But when no Follow Me sensor is
+configured the form renders that field with `default: ""`, so both
+echoing the `""` back and omitting the key fail schema validation
+before the handler runs — the submit comes back as `InvalidData @
+data['follow_me_function_sensor']` and no other setting in the dialog
+can be saved either. Until it is fixed, pass a real `sensor.*` entity
+id. Pinned by an `xfail` in
+`tests/integration/test_options_flow.py::test_save_without_a_follow_me_sensor_is_impossible`.
 
 ### 4.4 Subscribe to entity state changes
 
