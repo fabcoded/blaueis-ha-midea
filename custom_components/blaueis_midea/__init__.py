@@ -149,6 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
     # Prefix first: the field renames match on the suffix and must see the
     # entry-id form the platforms will look up.
     _migrate_to_entry_id_prefix(hass, entry)
+    _clear_ac_sw_version(hass, entry)
     _migrate_renamed_unique_ids(hass, entry)
     _migrate_display_buzzer_options(hass, entry)
     _migrate_fmf_keys(hass, entry)
@@ -555,6 +556,24 @@ def _migrate_to_entry_id_prefix(
             rekeyed,
             merged,
         )
+
+
+def _clear_ac_sw_version(
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
+) -> None:
+    """Drop the gateway version older releases stored as the AC device's
+    ``sw_version``. The AC's DeviceInfo no longer sets one, and HA keeps a
+    registry value that DeviceInfo leaves out, so it has to be cleared
+    explicitly. Idempotent: a no-op once the field is empty."""
+    from homeassistant.helpers import device_registry as dr
+
+    dev_reg = dr.async_get(hass)
+    ac = dev_reg.async_get_device(identifiers={(DOMAIN, f"{entry.entry_id}_ac")})
+    if ac is None or ac.sw_version is None:
+        return
+    dev_reg.async_update_device(ac.id, sw_version=None)
+    _LOGGER.info("AC device: cleared sw_version %r (it was the gateway's version)", ac.sw_version)
 
 
 # ── Field-rename migration ─────────────────────────────────────────────

@@ -104,13 +104,15 @@ class BlaueisMideaCoordinator:
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Device info for the AC unit (all AC entities link here)."""
+        """Device info for the AC unit (all AC entities link here).
+
+        No ``sw_version``: the AC's firmware version is unknown, and the
+        gateway's version belongs to the gateway device only."""
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self.entry_id}_ac")},
             name=self.device_name,
             manufacturer="Midea",
             model="HVAC",
-            sw_version=self.device.gateway_info.get("version", "unknown"),
         )
 
     @property

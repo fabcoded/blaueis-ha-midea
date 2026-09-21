@@ -39,6 +39,10 @@ Notable changes to the Blaueis Midea integration.
   close) stay ordinary connection errors and keep retrying.
 
 ### Fixed
+- **The AC device no longer shows the gateway's version.** Its
+  `sw_version` carried the gateway's version string; the AC's own
+  firmware version is unknown, so the field is now empty (and a stored
+  value is cleared on setup). The gateway device keeps its version.
 - **A failed setup no longer leaks its debug ring.** The in-memory debug
   log was attached before the gateway connect but only detached on
   unload, which HA never runs for a setup that failed — so every retry

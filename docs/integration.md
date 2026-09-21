@@ -261,7 +261,7 @@ A synthetic `select` entity (separate from glossary-derived selects) replaces th
 - **AC device** (`"{entry_id}_ac"`) — carries the climate entity + all AC sensors / switches / selects.
 - **Gateway device** (`"{entry_id}_gw"`) — carries Pi health sensors (CPU, RAM, temp, uptime) from the gateway's `pi_status` broadcast.
 
-This matches the physical topology: two distinct pieces of hardware, each with its own model / sw_version / configuration_url.
+This matches the physical topology: two distinct pieces of hardware, each with its own model and configuration. Only the gateway device carries a `sw_version` — the gateway's `git describe` string (the tag name at a release checkout). The AC device has none: the AC's firmware version is unknown, and a value older releases stored there (the gateway's version) is cleared on setup.
 
 ### 4.5 Unique ids
 

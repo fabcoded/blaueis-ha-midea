@@ -46,10 +46,10 @@ OLD_PREFIX = "127.0.0.1_8765_"  # {host}_{port}_ of the mock entry
 OLD_DEVICE = "127.0.0.1:8765"  # {host}:{port} of the mock entry's devices
 
 
-async def _setup(hass: HomeAssistant, entry) -> None:
+async def _setup(hass: HomeAssistant, entry, start=None) -> None:
     if hass.config_entries.async_get_entry(entry.entry_id) is None:
         entry.add_to_hass(hass)
-    with patch(_START, AsyncMock()):
+    with patch(_START, start or AsyncMock()):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
@@ -243,3 +243,31 @@ async def test_orphan_sweep_works_on_migrated_ids(hass: HomeAssistant, mock_conf
     assert reg.async_get(exclusive.entity_id) is None
     assert reg.async_get(deleted.entity_id) is None
     assert reg.async_get(seeded["climate"].entity_id) is not None
+
+
+# ── sw_version: the gateway device's, not the AC's ─────────────────────
+
+
+def _device(hass: HomeAssistant, entry, kind: str) -> dr.DeviceEntry:
+    return dr.async_get(hass).async_get_device(identifiers={(DOMAIN, _new(entry, kind))})
+
+
+async def test_only_the_gateway_device_reports_a_sw_version(hass: HomeAssistant, mock_config_entry) -> None:
+    async def _connect(coordinator) -> None:
+        # What the real connect learns from the gateway's version reply.
+        coordinator.device.gateway_info["version"] = "v0.1.0"
+
+    await _setup(hass, mock_config_entry, start=_connect)
+
+    assert _device(hass, mock_config_entry, "ac").sw_version is None
+    assert _device(hass, mock_config_entry, "gw").sw_version == "v0.1.0"
+
+
+async def test_a_stored_ac_sw_version_is_cleared(hass: HomeAssistant, mock_config_entry) -> None:
+    seeded = _seed_old_install(hass, mock_config_entry)
+    dr.async_get(hass).async_update_device(seeded["ac"].id, sw_version="v0.0.9")
+
+    await _setup(hass, mock_config_entry)
+
+    assert _device(hass, mock_config_entry, "ac").sw_version is None
+    assert _device(hass, mock_config_entry, "gw").sw_version is not None
