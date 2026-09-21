@@ -5,8 +5,8 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/fabcoded/blaueis-ha-midea",
-  "issue_tracker": "https://github.com/fabcoded/blaueis-ha-midea/issues",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/fabcoded/blaueis-ha-midea/issues",
   "requirements": [
     "websockets>=12.0",
     "pyyaml>=6.0",

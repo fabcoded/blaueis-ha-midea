@@ -6,8 +6,8 @@
    (`.github/workflows/release.yml`), with notes prefilled from the matching
    `CHANGELOG.md` section when one exists, and runs hassfest plus the HACS
    validation action (`.github/workflows/validate.yml`).
-3. A human publishes the draft once both checks are green (see
-   "Known-red checks" below for the two that are not yet). HACS serves
+3. A human publishes the draft once the Validate run is green (see
+   "What the Validate workflow checks" below). HACS serves
    versions from GitHub **releases**, not from tags alone — a pushed tag
    with no published release stays invisible to HACS. The workflow marks
    the draft as a **pre-release** when the tag carries `a`, `b` or `rc`
@@ -28,19 +28,28 @@ from the custom repository, then the proofs of the rc rehearsal. The final
 release repeats the same order (libmidea → gateway → ha-midea), with
 **blaueis-hvacshark**'s annotated tag last.
 
-## Known-red checks
+## What the Validate workflow checks
 
-Two HACS-action checks fail until the maintainer resolves them, so "both
-checks green" cannot hold yet:
+`validate.yml` runs hassfest and the HACS action on every push and weekly.
+Everything it needs is in the tree or in the repository settings:
 
-- **license** — `LICENSE` is still CC0-1.0, which SPDX marks as not
-  OSI-approved. The fix is the relicense, not a workflow `ignore:`.
-- **brands** — the repository has no `brand/icon.png` and the integration
-  domain is not registered in the Home Assistant brands repository.
+- **hassfest** — `manifest.json` keys in the order `domain`, `name`, then
+  alphabetical; the other manifest fields as HA requires.
+- **HACS repository checks** — a repository description and topics
+  (repository settings, set with `gh repo edit`), issues enabled, and
+  `hacs.json`.
+- **HACS brands** — `custom_components/blaueis_midea/brand/icon.png` and
+  `icon@2x.png` (a placeholder today, see "Before the first release"), or a
+  listing in the `home-assistant/brands` repository.
+- **HACS license** — an OSI-approved `LICENSE` (MIT since the relicense).
+
+A red run blocks merges to `main` until it is fixed (workspace rule).
 
 ## Before the first release
 
-- `brand/icon.png` — the maintainer supplies the artwork; nothing here
-  invents one.
+- `custom_components/blaueis_midea/brand/icon.png` and `icon@2x.png` are a
+  placeholder (glacier-blue square, white "B"). Replace them with the
+  maintainer's artwork under the same file names. The HACS brands check also
+  accepts a listing in the `home-assistant/brands` repository later.
 - GitHub repository settings: a description, topics, and Issues enabled
   (the HACS action checks all three).
