@@ -32,6 +32,13 @@ Notable changes to the Blaueis Midea integration.
   close) stay ordinary connection errors and keep retrying.
 
 ### Fixed
+- **No false "connected" after the gateway restarts.** A gateway restart
+  could leave the integration showing "connected" for a link that had
+  already dropped, and a reconnect could send one plaintext message
+  before the key was confirmed. The vendored library now reports
+  connected only for a link that is still up, sends nothing until the
+  key is confirmed, and the gateway closes a connection that sends bad
+  input cleanly instead of leaving it half-open.
 - **Swing "off" releases a fixed vane position.** Selecting `off` while
   the vane was parked at a fixed position wrote an angle reset the
   firmware ignores, so the vane stayed put. It now engages swing and then

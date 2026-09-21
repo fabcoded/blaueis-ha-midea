@@ -216,6 +216,13 @@ class Device:
         # have a real value, eliminating the boot/reconnect false-False window.
         self._initial_status_event: asyncio.Event | None = None
         self._post_connect_task: asyncio.Task | None = None
+        # Link generation: bumped on every successful connect and on every
+        # loss/stop. ``_connect`` returns the value for the link it just
+        # established and the caller hands it to ``_post_connect_init``,
+        # which only fires ``on_connected`` if it is unchanged — a handshake
+        # belonging to a link that has since dropped must never report
+        # "connected" after the drop's ``on_disconnected``.
+        self._link_gen = 0
 
         # ── Task management ────────────────────────────────
         self._running = False
@@ -519,8 +526,10 @@ class Device:
             else:
                 self._psk_bytes = psk_to_bytes(self._psk_raw)
 
-        # Initial connection
-        await self._connect()
+        # Initial connection. The generation is taken here, where the link
+        # is established: the queries below can take seconds, and the link
+        # may drop before the handshake gets to run.
+        gen = await self._connect()
         self._running = True
 
         # Start listen loop immediately (needed for B5 response reception)
@@ -534,7 +543,7 @@ class Device:
         # ingest to land. Awaits inline (no listen-loop deadlock — the
         # listen loop is running in a separate task at this point and
         # will deliver the rsp_0xc0 frame). Fires on_connected after.
-        await self._post_connect_init()
+        await self._post_connect_init(gen)
 
         # Start poll loop (queries derived from database each cycle)
         self._poll_task = asyncio.create_task(self._poll_loop())
@@ -547,6 +556,7 @@ class Device:
     async def stop(self):
         """Stop supervisor and all loops, disconnect."""
         self._running = False
+        self._link_gen += 1
 
         for task in [
             self._supervisor_task,
@@ -575,20 +585,38 @@ class Device:
 
     # ── Connection management ──────────────────────────────
 
-    async def _connect(self):
+    async def _connect(self) -> int:
         """Establish WebSocket connection and wire up message handler.
+
+        Returns the link generation of the connection just established;
+        pass it to ``_post_connect_init``.
 
         Does NOT fire ``on_connected``. That is deferred to
         ``_post_connect_init`` so HA's connected flag flips True only
         after the first C0 has been ingested (entities have real values
         instead of None at the moment of availability).
         """
-        self._client = HvacClient(self.host, self.port, psk=self._psk_bytes, no_encrypt=self._no_encrypt)
-        await self._client.connect()
-        self._client.add_listener(self._on_gateway_message)
+        # Publish the client only once its session handshake is complete.
+        # While ``connect()`` is in flight, the poll loop and writers keep
+        # seeing the old (closed) client and skip — a send on the new
+        # socket before key confirmation would reach the gateway as a
+        # plaintext message in the middle of its encrypted session.
+        client = HvacClient(self.host, self.port, psk=self._psk_bytes, no_encrypt=self._no_encrypt)
+        await client.connect()
+        client.add_listener(self._on_gateway_message)
+        self._client = client
+        self._link_gen += 1
+        return self._link_gen
 
     async def _reconnect(self):
         """Reconnect WebSocket with backoff. Does NOT re-query B5 or wipe status."""
+        # The link is gone: invalidate any post-connect handshake still
+        # running for it, so it cannot fire on_connected after the
+        # on_disconnected below.
+        self._link_gen += 1
+        if self._post_connect_task and not self._post_connect_task.done():
+            self._post_connect_task.cancel()
+        self._post_connect_task = None
         if self.on_disconnected:
             self.on_disconnected()
 
@@ -608,7 +636,7 @@ class Device:
                 if self._client:
                     with contextlib.suppress(Exception):
                         await self._client.close()
-                await self._connect()
+                gen = await self._connect()
                 log.info("Reconnected to %s:%d", self.host, self.port)
                 # Cannot await the post-connect handshake inline here —
                 # this method is called from inside _listen_loop, which
@@ -617,7 +645,7 @@ class Device:
                 # and the listen loop resumes consuming frames.
                 if self._post_connect_task and not self._post_connect_task.done():
                     self._post_connect_task.cancel()
-                self._post_connect_task = asyncio.create_task(self._post_connect_init())
+                self._post_connect_task = asyncio.create_task(self._post_connect_init(gen))
                 return
             except AuthenticationError as e:
                 # Confirmed credential problem (key confirmation failed)
@@ -849,7 +877,7 @@ class Device:
         finally:
             self._initial_status_event = None
 
-    async def _post_connect_init(self) -> None:
+    async def _post_connect_init(self, link_gen: int | None = None) -> None:
         """Run post-(re)connect handshake, then fire ``on_connected``.
 
         Sequence: send one status query, wait for the first C0 ingest to
@@ -861,7 +889,16 @@ class Device:
         re-entered yet) and spawned as a task from ``_reconnect()`` (where
         the listen loop is suspended in this same call stack and would
         deadlock the C0 ingest path if we awaited inline).
+
+        ``link_gen`` is the generation ``_connect`` returned for the link
+        this handshake belongs to. If that link is lost (or the device is
+        stopped) at any point before the handshake finishes — including
+        before it starts running — ``on_connected`` is not fired; the next
+        successful reconnect runs its own handshake. ``None`` means "the
+        current link" (callers that connected just before).
         """
+        if link_gen is None:
+            link_gen = self._link_gen
         try:
             ok = await self._query_initial_status()
             if ok:
@@ -870,6 +907,9 @@ class Device:
             raise
         except Exception:
             log.exception("Initial status query crashed")
+        if link_gen != self._link_gen:
+            log.debug("Link lost during post-connect handshake; not reporting connected")
+            return
         if self.on_connected:
             try:
                 self.on_connected()

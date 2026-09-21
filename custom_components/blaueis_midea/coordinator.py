@@ -127,8 +127,10 @@ class BlaueisMideaCoordinator:
         self.device.on_disconnected = self._on_disconnected
         self.device.on_gateway_stats = self._on_gateway_stats
         self.device.on_auth_failed = self._on_auth_failed
+        # ``_connected`` is left to the Device's callbacks: a clean start
+        # fires on_connected from inside start(); a link that drops during
+        # start() fires on_disconnected and must stay disconnected.
         await self.device.start()
-        self._connected = True
 
         # Freshness watcher: HA's availability model is pull-based —
         # nothing re-evaluates entity.available unless something fires
