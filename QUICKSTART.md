@@ -55,14 +55,14 @@ sudo raspi-config
 
 Find your model with `cat /proc/device-tree/model`.
 
-- **Pi Zero W, Zero 2 W, 3, 4** — Bluetooth sits on the primary UART and the header pins get the mini UART. Move Bluetooth off:
+- **Pi Zero W, Zero 2 W, 3, 4** — Bluetooth holds the PL011 UART (`ttyAMA0`) by default and the header pins get the mini UART. Move Bluetooth off:
 
   ```sh
   echo "dtoverlay=disable-bt" | sudo tee -a /boot/firmware/config.txt
   sudo systemctl disable hciuart
   ```
 
-  To keep Bluetooth instead: `dtoverlay=miniuart-bt` plus `core_freq=250` in the same file — untested here, so prefer `disable-bt`.
+  To keep Bluetooth instead: `dtoverlay=miniuart-bt` plus `core_freq=250` in the same file (`force_turbo=1` also works; keep `hciuart` enabled) — untested here, so prefer `disable-bt`.
 
 - **Pi 5** — `/dev/serial0` is the 3-pin debug header, not pins 8/10. Enable the header UART instead:
 
