@@ -56,6 +56,11 @@ class BlaueisMideaCoordinator:
         # Set by __init__.async_setup_entry — called (once) when the
         # Device's reconnect loop hits a credential error and stops.
         self.on_auth_failed: Callable[[str], None] | None = None
+        # Set by __init__.async_setup_entry once the first connect has
+        # succeeded — called when a loaded entry's connection drops or is
+        # re-established. Cleared by async_stop: stopping is not an outage.
+        self.on_connection_lost: Callable[[], None] | None = None
+        self.on_connection_restored: Callable[[], None] | None = None
         # Ingress hooks — subscribers called on every device-state update.
         # See _ingress_hook.py for the protocol. Registration typically
         # happens in the owning entity's async_added_to_hass.
@@ -141,6 +146,9 @@ class BlaueisMideaCoordinator:
 
     async def async_stop(self) -> None:
         """Stop the Device and Follow Me manager."""
+        # Device.stop() reports a disconnect; that is a shutdown, not a lost link.
+        self.on_connection_lost = None
+        self.on_connection_restored = None
         if self.blaueis_follow_me.active or self.blaueis_follow_me._stopping:
             await self.blaueis_follow_me.async_stop()
         if self._freshness_watcher_task is not None:
@@ -328,10 +336,20 @@ class BlaueisMideaCoordinator:
     def _on_connected(self) -> None:
         self._connected = True
         _LOGGER.info("Gateway connected: %s:%d", self.host, self.port)
+        if self.on_connection_restored is not None:
+            try:
+                self.on_connection_restored()
+            except Exception:
+                _LOGGER.exception("on_connection_restored hook error")
 
     def _on_disconnected(self) -> None:
         self._connected = False
         _LOGGER.warning("Gateway disconnected: %s:%d", self.host, self.port)
+        if self.on_connection_lost is not None:
+            try:
+                self.on_connection_lost()
+            except Exception:
+                _LOGGER.exception("on_connection_lost hook error")
 
     def _on_auth_failed(self, reason: str) -> None:
         """Device reconnect hit a credential error (PSK mismatch /

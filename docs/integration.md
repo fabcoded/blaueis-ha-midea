@@ -371,11 +371,16 @@ come back and interrupts every other integration.
 
 ### 7.2 "Blaueis gateway unreachable" in Repairs
 
-When the gateway cannot be reached at setup (HA start, entry reload), the entry goes to *retrying setup* and HA retries with backoff. That alone is silent — a gateway reboot or a short network blip is not worth a notification. If the gateway is still unreachable **15 minutes** after the first failed attempt, a warning issue appears under Settings → System → Repairs, one per config entry, naming the host and port.
+The issue is raised on two paths, off one 15-minute clock per config entry:
 
-It clears itself: the next successful setup deletes it (so does an auth failure, which proves the gateway is reachable and hands over to the reauth flow, and deleting the entry). The 15-minute clock is kept in memory, so it restarts after an HA restart, and it restarts after every successful connection. Only setup-time outages are covered — a gateway that drops out while the entry is loaded shows as unavailable entities, not as an issue.
+- **At setup** (HA start, entry reload): the entry goes to *retrying setup* and HA retries with backoff. That alone is silent — a gateway reboot or a short network blip is not worth a notification.
+- **While the entry is loaded**: when the gateway goes down under a running entry, the entry stays loaded and its connection retries on its own; entities go unavailable, and the same clock starts when the connection drops.
 
-One case does not clear it: if you **disable** the entry while it is still retrying, HA cancels the retry without calling the integration, so the issue stays in Repairs until the next HA restart (HA reloads it as inactive then). Deleting the entry, or a setup that finally succeeds, clears it as described above.
+If the gateway is still unreachable **15 minutes** after the first failed attempt or the dropped connection, a warning issue appears under Settings → System → Repairs, one per config entry, naming the host and port.
+
+It clears itself: the next successful setup or reconnect deletes it (so does an auth failure, which proves the gateway is reachable and hands over to the reauth flow, and deleting the entry). The 15-minute clock is kept in memory, so it restarts after an HA restart, and it restarts after every successful connection.
+
+Two cases leave a raised issue in place: **disabling** the entry while it is still retrying (HA cancels the retry without calling the integration), and **disabling or unloading** a loaded entry (the integration only stops its timer — an unload says nothing about the gateway). The issue then stays in Repairs until the entry is set up successfully again, is deleted, or HA restarts.
 
 To fix, work through §7.1's `cannot_connect` causes.
 

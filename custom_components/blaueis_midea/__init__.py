@@ -20,12 +20,13 @@ if _LIB not in sys.path:
 
 from homeassistant.config_entries import ConfigEntry  # noqa: E402
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform  # noqa: E402
-from homeassistant.core import HomeAssistant  # noqa: E402
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback  # noqa: E402
 from homeassistant.exceptions import (  # noqa: E402
     ConfigEntryAuthFailed,
     ConfigEntryNotReady,
 )
 from homeassistant.helpers import issue_registry as ir  # noqa: E402
+from homeassistant.helpers.event import async_call_later  # noqa: E402
 from homeassistant.util import dt as dt_util  # noqa: E402
 from websockets.exceptions import WebSocketException  # noqa: E402
 
@@ -120,9 +121,10 @@ _REMOVED_FIELDS: frozenset[str] = frozenset(
     }
 )
 
-# A gateway that stays unreachable through setup retries for this long gets a
-# Repairs issue (one per config entry). Shorter outages — a gateway reboot, a
-# Wi-Fi blip — stay silent: HA's retry backoff already handles them.
+# A gateway that stays unreachable for this long — through setup retries, or
+# as a dropped connection of a loaded entry — gets a Repairs issue (one per
+# config entry). Shorter outages — a gateway reboot, a Wi-Fi blip — stay
+# silent: HA's retry backoff and the Device's reconnect loop handle them.
 GATEWAY_UNREACHABLE_ISSUE_AFTER = timedelta(minutes=15)
 GATEWAY_UNREACHABLE_ISSUE = "gateway_unreachable"
 
@@ -180,6 +182,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
             port,
             reason,
         )
+        # The gateway answered, so it is not unreachable — reauth takes over.
+        _clear_gateway_unreachable(hass, entry)
         entry.async_start_reauth(hass)
 
     coordinator.on_auth_failed = _on_auth_failed
@@ -207,6 +211,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
 
     _clear_gateway_unreachable(hass, entry)
     entry.runtime_data = coordinator
+
+    # From here on a dropped connection is an outage of a loaded entry: the
+    # Device keeps reconnecting on its own, so setup never fails again and
+    # the setup-path check above cannot see it.
+    coordinator.on_connection_lost = lambda: _begin_gateway_outage(hass, entry, host, port)
+    coordinator.on_connection_restored = lambda: _clear_gateway_unreachable(hass, entry)
+    entry.async_on_unload(lambda: _forget_gateway_outage(hass, entry))
 
     fm = coordinator.blaueis_follow_me
     fm.configure_guards(entry.options)
@@ -352,18 +363,27 @@ def _gateway_issue_id(entry: BlaueisMideaConfigEntry) -> str:
 
 
 def _unreachable_since(hass: HomeAssistant) -> dict:
-    """entry_id → time of the first failed setup in the current outage.
-    In-memory only: after an HA restart the 15-minute clock starts over."""
+    """entry_id → start of the current outage: the first failed setup, or the
+    moment a loaded entry lost its connection. One clock per entry, shared by
+    both paths. In-memory only: after an HA restart the 15-minute clock
+    starts over."""
     return hass.data.setdefault(DOMAIN, {}).setdefault("gateway_unreachable_since", {})
 
 
-def _note_gateway_unreachable(hass: HomeAssistant, entry: BlaueisMideaConfigEntry, host: str, port: int) -> None:
-    """Record a failed setup; raise the Repairs issue once the outage has
-    lasted GATEWAY_UNREACHABLE_ISSUE_AFTER. Earlier failures stay silent."""
+def _outage_timers(hass: HomeAssistant) -> dict[str, CALLBACK_TYPE]:
+    """entry_id → cancel handle of the timer that raises the issue for a
+    loaded entry whose connection dropped."""
+    return hass.data.setdefault(DOMAIN, {}).setdefault("gateway_outage_timers", {})
+
+
+def _note_gateway_unreachable(hass: HomeAssistant, entry: BlaueisMideaConfigEntry, host: str, port: int) -> bool:
+    """Record an unreachable gateway; raise the Repairs issue once the outage
+    has lasted GATEWAY_UNREACHABLE_ISSUE_AFTER. Earlier calls stay silent.
+    Returns True once the issue is up."""
     now = dt_util.utcnow()
     since = _unreachable_since(hass).setdefault(entry.entry_id, now)
     if now - since < GATEWAY_UNREACHABLE_ISSUE_AFTER:
-        return
+        return False
     ir.async_create_issue(
         hass,
         DOMAIN,
@@ -378,13 +398,48 @@ def _note_gateway_unreachable(hass: HomeAssistant, entry: BlaueisMideaConfigEntr
             "minutes": str(int(GATEWAY_UNREACHABLE_ISSUE_AFTER.total_seconds() // 60)),
         },
     )
+    return True
 
 
 def _clear_gateway_unreachable(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> None:
-    """End the outage: forget its start time and delete the issue (no-op
-    when neither exists)."""
-    _unreachable_since(hass).pop(entry.entry_id, None)
+    """End the outage: forget its start time, stop its timer and delete the
+    issue (no-op when none of them exist)."""
+    _forget_gateway_outage(hass, entry)
     ir.async_delete_issue(hass, DOMAIN, _gateway_issue_id(entry))
+
+
+def _forget_gateway_outage(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> None:
+    """Drop the outage clock and timer but leave the issue alone — an unload
+    or reload says nothing about the gateway."""
+    _unreachable_since(hass).pop(entry.entry_id, None)
+    if (cancel := _outage_timers(hass).pop(entry.entry_id, None)) is not None:
+        cancel()
+
+
+def _begin_gateway_outage(hass: HomeAssistant, entry: BlaueisMideaConfigEntry, host: str, port: int) -> None:
+    """A loaded entry lost its connection: start the outage clock and arm the
+    timer that raises the issue if the outage lasts. Repeat calls during the
+    same outage keep the first clock and timer."""
+    now = dt_util.utcnow()
+    _unreachable_since(hass).setdefault(entry.entry_id, now)
+    if entry.entry_id not in _outage_timers(hass):
+        _arm_outage_timer(hass, entry, host, port, GATEWAY_UNREACHABLE_ISSUE_AFTER)
+
+
+def _arm_outage_timer(
+    hass: HomeAssistant, entry: BlaueisMideaConfigEntry, host: str, port: int, delay: timedelta
+) -> None:
+    @callback
+    def _fire(_now) -> None:
+        _outage_timers(hass).pop(entry.entry_id, None)
+        if _note_gateway_unreachable(hass, entry, host, port):
+            return
+        # Woke a moment before the wall-clock deadline: wait out the rest.
+        since = _unreachable_since(hass)[entry.entry_id]
+        rest = since + GATEWAY_UNREACHABLE_ISSUE_AFTER - dt_util.utcnow()
+        _arm_outage_timer(hass, entry, host, port, max(rest, timedelta(seconds=1)))
+
+    _outage_timers(hass)[entry.entry_id] = async_call_later(hass, delay, _fire)
 
 
 # ── Field-rename migration ─────────────────────────────────────────────

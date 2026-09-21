@@ -16,11 +16,12 @@ Notable changes to the Blaueis Midea integration.
   in copies and derivative works.
 
 ### Added
-- **Repairs issue when the gateway stays unreachable.** If setup keeps
-  failing because the gateway cannot be reached, a warning issue appears
-  in Repairs once the outage has lasted 15 minutes (one per config entry).
-  Shorter outages stay silent, and the issue clears itself on the next
-  successful connection. See `docs/integration.md` §7.2.
+- **Repairs issue when the gateway stays unreachable.** If the gateway
+  cannot be reached for 15 minutes — setup keeps failing, or a running
+  entry's connection drops and does not come back — a warning issue
+  appears in Repairs (one per config entry). Shorter outages stay silent,
+  and the issue clears itself on the next successful connection. See
+  `docs/integration.md` §7.2.
 - **Reauthentication flow.** A wrong PSK is now detected during the
   config flow and at startup (key confirmation) and surfaces as
   "invalid authentication" instead of a connection error. If the
