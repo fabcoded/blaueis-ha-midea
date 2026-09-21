@@ -25,6 +25,7 @@ _VENDORED_LIB = _REPO_ROOT / "custom_components" / "blaueis_midea" / "lib"
 if str(_VENDORED_LIB) not in sys.path:
     sys.path.insert(0, str(_VENDORED_LIB))
 
+import asyncio  # noqa: E402
 import logging  # noqa: E402
 from unittest.mock import AsyncMock, patch  # noqa: E402
 
@@ -183,6 +184,22 @@ async def test_every_failed_setup_path_detaches_the_debug_ring(
         await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+    for name in integration._RING_LOGGERS:
+        assert _ring_handlers(name) == []
+
+
+async def test_cancelled_setup_detaches_the_debug_ring_once(hass: HomeAssistant, mock_config_entry) -> None:
+    """A cancelled setup is not an Exception: the ring is still detached, once,
+    and the cancellation propagates out of ``async_setup_entry``."""
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(_START, AsyncMock(side_effect=asyncio.CancelledError())),
+        patch.object(integration, "_uninstall_debug_ring", wraps=integration._uninstall_debug_ring) as uninstall,
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await integration.async_setup_entry(hass, mock_config_entry)
+
+    uninstall.assert_called_once_with(mock_config_entry)
     for name in integration._RING_LOGGERS:
         assert _ring_handlers(name) == []
 

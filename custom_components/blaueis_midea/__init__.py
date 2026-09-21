@@ -146,8 +146,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
     # accepts the pre-derived bytes and skips its own derivation.
     psk = await hass.async_add_executor_job(psk_to_bytes, psk) if psk else psk
 
-    # Prefix first: the field renames match on the suffix and must see the
-    # entry-id form the platforms will look up.
+    # Prefix first, by convention: the prefix migration matches the old
+    # prefix and the renames match the suffix, so either order gives the
+    # same result.
     _migrate_to_entry_id_prefix(hass, entry)
     _clear_ac_sw_version(hass, entry)
     _migrate_renamed_unique_ids(hass, entry)
@@ -541,7 +542,8 @@ def _migrate_to_entry_id_prefix(
             new_ident[1],
         )
         for ent in er.async_entries_for_device(ent_reg, old.id, include_disabled_entities=True):
-            ent_reg.async_update_entity(ent.entity_id, device_id=kept.id)
+            if ent.config_entry_id == entry.entry_id:
+                ent_reg.async_update_entity(ent.entity_id, device_id=kept.id)
         dev_reg.async_update_device(old.id, remove_config_entry_id=entry.entry_id)
         merged += 1
 

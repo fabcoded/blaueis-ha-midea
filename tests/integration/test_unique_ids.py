@@ -216,6 +216,27 @@ async def test_migration_collision_keeps_the_entry_id_holder(hass: HomeAssistant
     assert len([r for r in caplog.records if "stale duplicate" in r.message]) == 2  # one entity, one device
 
 
+async def test_merge_moves_only_this_entrys_entities(hass: HomeAssistant, mock_config_entry) -> None:
+    """The stale device also carries another config entry's entity: only this
+    entry's entities move to the kept device, the foreign one stays put."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    seeded = _seed_old_install(hass, mock_config_entry)
+    other = MockConfigEntry(domain=DOMAIN, data=dict(mock_config_entry.data), unique_id="other")
+    other.add_to_hass(hass)
+    _seed_device(hass, other, f"{OLD_DEVICE}_ac", "Midea AC")  # links the stale device to `other` too
+    new_ac = _seed_device(hass, mock_config_entry, _new(mock_config_entry, "ac"), "Midea AC")
+    own = _seed_entity(hass, mock_config_entry, "sensor", f"{OLD_PREFIX}gw_ram_used_mb", "ac_own", seeded["ac"])
+    foreign = _seed_entity(hass, other, "sensor", "other_only", "other_only", seeded["ac"])
+
+    integration._migrate_to_entry_id_prefix(hass, mock_config_entry)
+
+    reg = er.async_get(hass)
+    assert reg.async_get(own.entity_id).device_id == new_ac.id
+    assert reg.async_get(foreign.entity_id).device_id == seeded["ac"].id
+    assert reg.async_get(foreign.entity_id).unique_id == "other_only"
+
+
 async def test_field_renames_still_apply_after_the_prefix_migration(hass: HomeAssistant, mock_config_entry) -> None:
     """An old-prefix entity with an old field name comes out with both the
     entry-id prefix and the new name (orphan sweep patched out: no caps
