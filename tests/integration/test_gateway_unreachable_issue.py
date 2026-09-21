@@ -346,6 +346,39 @@ async def test_stopping_the_coordinator_is_not_a_lost_connection(coordinator) ->
     lost.assert_not_called()
 
 
+async def test_setup_failing_after_the_connect_stops_the_device_and_leaves_no_outage(
+    hass: HomeAssistant, mock_config_entry, freezer
+) -> None:
+    """HA does not run the unload callbacks of an entry whose setup failed,
+    so the hooks wired after the connect must not outlive it: the Device is
+    stopped, and a drop reported afterwards arms no timer for a dead entry."""
+    from blaueis.client.device import Device
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(_DEVICE_START, AsyncMock()),
+        patch.object(Device, "stop", autospec=True, side_effect=Device.stop) as stop,
+        patch.object(
+            hass.config_entries, "async_forward_entry_setups", AsyncMock(side_effect=RuntimeError("platform boom"))
+        ),
+    ):
+        assert not await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+    assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+
+    coordinator = mock_config_entry.runtime_data
+    stop.assert_awaited_once_with(coordinator.device)
+    assert coordinator.on_connection_lost is None
+    assert coordinator.on_connection_restored is None
+
+    coordinator.device.on_disconnected()
+    await _elapse(hass, freezer, minutes=30)
+
+    assert not integration._outage_timers(hass)
+    assert mock_config_entry.entry_id not in integration._unreachable_since(hass)
+    assert _issue(hass, mock_config_entry) is None
+
+
 async def test_unload_leaves_a_raised_issue_and_removal_deletes_it(
     hass: HomeAssistant, mock_config_entry, coordinator, freezer
 ) -> None:

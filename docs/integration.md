@@ -378,7 +378,7 @@ The issue is raised on two paths, off one 15-minute clock per config entry:
 
 If the gateway is still unreachable **15 minutes** after the first failed attempt or the dropped connection, a warning issue appears under Settings → System → Repairs, one per config entry, naming the host and port.
 
-It clears itself: the next successful setup or reconnect deletes it (so does an auth failure, which proves the gateway is reachable and hands over to the reauth flow, and deleting the entry). The 15-minute clock is kept in memory, so it restarts after an HA restart, and it restarts after every successful connection.
+It clears itself: the next successful setup or reconnect deletes it (so does an auth failure, which proves the gateway is reachable and hands over to the reauth flow, and deleting the entry). The 15-minute clock is kept in memory, so it restarts after an HA restart, after a reload or a disable/enable of the entry (an outage that is already running counts from the new setup attempt, not from the original drop), and after every successful connection.
 
 Two cases leave a raised issue in place: **disabling** the entry while it is still retrying (HA cancels the retry without calling the integration), and **disabling or unloading** a loaded entry (the integration only stops its timer — an unload says nothing about the gateway). The issue then stays in Repairs until the entry is set up successfully again, is deleted, or HA restarts.
 

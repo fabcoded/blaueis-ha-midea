@@ -209,62 +209,72 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
         _note_gateway_unreachable(hass, entry, host, port)
         raise ConfigEntryNotReady(f"Cannot reach Blaueis gateway at {host}:{port}: {err}") from err
 
-    _clear_gateway_unreachable(hass, entry)
-    entry.runtime_data = coordinator
+    # Past this point the Device is running and its hooks get wired. HA does
+    # not run async_on_unload callbacks when setup fails, so a failure here
+    # must stop the Device itself — otherwise it keeps reconnecting and its
+    # hooks could arm an outage timer for an entry that never loaded.
+    try:
+        _clear_gateway_unreachable(hass, entry)
+        entry.runtime_data = coordinator
 
-    # From here on a dropped connection is an outage of a loaded entry: the
-    # Device keeps reconnecting on its own, so setup never fails again and
-    # the setup-path check above cannot see it.
-    coordinator.on_connection_lost = lambda: _begin_gateway_outage(hass, entry, host, port)
-    coordinator.on_connection_restored = lambda: _clear_gateway_unreachable(hass, entry)
-    entry.async_on_unload(lambda: _forget_gateway_outage(hass, entry))
+        # From here on a dropped connection is an outage of a loaded entry: the
+        # Device keeps reconnecting on its own, so setup never fails again and
+        # the setup-path check above cannot see it.
+        coordinator.on_connection_lost = lambda: _begin_gateway_outage(hass, entry, host, port)
+        coordinator.on_connection_restored = lambda: _clear_gateway_unreachable(hass, entry)
+        entry.async_on_unload(lambda: _forget_gateway_outage(hass, entry))
 
-    fm = coordinator.blaueis_follow_me
-    fm.configure_guards(entry.options)
-    # Invariant: Enabled cannot outlive Configured. If a stored
-    # combination has Configured=False with Enabled=True (e.g. from a
-    # hand-edited config_entries.json or a pre-invariant install),
-    # normalise once at setup so the FM manager and the entity
-    # registry visibility helper see consistent state.
-    _enforce_fmf_invariant(hass, entry)
-    configured = entry.options.get(CONF_FMF_CONFIGURED, False)
-    enabled = entry.options.get(CONF_FMF_ENABLED, False)
-    source = entry.options.get(CONF_FMF_SENSOR)
-    if configured and enabled and source:
-        try:
-            await fm.async_start(source)
-        except Exception:
-            _LOGGER.warning("Follow Me Function auto-start failed")
+        fm = coordinator.blaueis_follow_me
+        fm.configure_guards(entry.options)
+        # Invariant: Enabled cannot outlive Configured. If a stored
+        # combination has Configured=False with Enabled=True (e.g. from a
+        # hand-edited config_entries.json or a pre-invariant install),
+        # normalise once at setup so the FM manager and the entity
+        # registry visibility helper see consistent state.
+        _enforce_fmf_invariant(hass, entry)
+        configured = entry.options.get(CONF_FMF_CONFIGURED, False)
+        enabled = entry.options.get(CONF_FMF_ENABLED, False)
+        source = entry.options.get(CONF_FMF_SENSOR)
+        if configured and enabled and source:
+            try:
+                await fm.async_start(source)
+            except Exception:
+                _LOGGER.warning("Follow Me Function auto-start failed")
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Generic cleanup: any HA entity owned by this entry whose unique_id
-    # suffix matches a glossary field name that's NOT in the current
-    # available_fields gets removed from the registry. Catches stale
-    # entities left behind by cap changes (B5 update, override flip,
-    # firmware repair) without per-field bespoke migration code.
-    _cleanup_orphaned_field_entities(hass, entry, coordinator)
+        # Generic cleanup: any HA entity owned by this entry whose unique_id
+        # suffix matches a glossary field name that's NOT in the current
+        # available_fields gets removed from the registry. Catches stale
+        # entities left behind by cap changes (B5 update, override flip,
+        # firmware repair) without per-field bespoke migration code.
+        _cleanup_orphaned_field_entities(hass, entry, coordinator)
 
-    # Reconcile the Follow Me switch's registration with the master
-    # "Configured" flag. Adds the switch dynamically when Configured is
-    # on (and somehow missing), purges it from the entity registry when
-    # Configured is off. The unique_id is stable, so HA re-uses the
-    # same entity_id when the switch is added back.
-    _sync_fm_switch_registration(hass, entry, coordinator)
+        # Reconcile the Follow Me switch's registration with the master
+        # "Configured" flag. Adds the switch dynamically when Configured is
+        # on (and somehow missing), purges it from the entity registry when
+        # Configured is off. The unique_id is stable, so HA re-uses the
+        # same entity_id when the switch is added back.
+        _sync_fm_switch_registration(hass, entry, coordinator)
 
-    # Register the field-inventory service + HTTP view (global,
-    # registered on first entry setup; no-op on subsequent entries).
-    from .field_inventory import async_setup_field_inventory
+        # Register the field-inventory service + HTTP view (global,
+        # registered on first entry setup; no-op on subsequent entries).
+        from .field_inventory import async_setup_field_inventory
 
-    await async_setup_field_inventory(hass, entry)
+        await async_setup_field_inventory(hass, entry)
 
-    # Register the debug-only test_suppress service (idempotent).
-    from ._test_suppress import async_setup_test_suppress
+        # Register the debug-only test_suppress service (idempotent).
+        from ._test_suppress import async_setup_test_suppress
 
-    await async_setup_test_suppress(hass)
+        await async_setup_test_suppress(hass)
 
-    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
-    return True
+        entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+        return True
+    except BaseException:
+        with contextlib.suppress(Exception):
+            await coordinator.async_stop()
+        _forget_gateway_outage(hass, entry)
+        raise
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> None:
