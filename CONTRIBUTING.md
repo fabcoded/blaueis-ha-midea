@@ -37,7 +37,7 @@ ruff check && ruff format --check
 python3 -m pytest
 ```
 
-Tests must stay green (360 passing + 1 `xfail` currently). The suite has
+Tests must stay green (397 passing + 2 `xfail` currently). The suite has
 two halves, and CI runs both on every PR:
 
 ```sh
