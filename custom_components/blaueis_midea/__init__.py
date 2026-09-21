@@ -102,6 +102,21 @@ _FIELD_RENAMES: dict[str, str] = {
     "breezeless": "breeze_away",
 }
 
+# Glossary fields that were deleted outright (not renamed). The orphan sweep
+# keys pass 1 on the *current* glossary universe, so an entity whose field no
+# longer exists there matches nothing and would survive forever as a
+# `restored` ghost. List such fields here; the sweep removes their field entity
+# and any `<field>_slider` number. Entries can stay forever — once no entity
+# matches, the pass is a no-op.
+_REMOVED_FIELDS: frozenset[str] = frozenset(
+    {
+        # Decoded rsp_0xc0 body[1] bit 0, which is the `power` flag itself —
+        # a duplicate that claimed "compressor running" semantics it never
+        # had. Dropped from the glossary 2026-05-09.
+        "run_status",
+    }
+)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> bool:
     """Set up Blaueis Midea AC from a config entry."""
@@ -573,14 +588,20 @@ def _cleanup_orphaned_field_entities(
       4. If the suffix is a known glossary field name AND that field is
          NOT in ``available_fields``, remove the entity from the registry.
 
-    Two passes:
+    Three passes:
 
     1. **Field-driven entities.** Suffix matches a known glossary field
        name AND that field is not in ``available_fields`` → remove.
        Synthetic entities (suffixes that aren't glossary fields) skip
        this pass.
 
-    2. **Synthetic entities with declared cap dependencies.** Suffix
+    2. **Deleted glossary fields.** Suffix is in ``_REMOVED_FIELDS``
+       (or ``<removed>_slider``) → remove. Pass 1 cannot see these:
+       the field is gone from the glossary universe, so nothing would
+       ever recreate the entity and it would sit in the registry as a
+       ``restored`` ghost.
+
+    3. **Synthetic entities with declared cap dependencies.** Suffix
        is in ``SYNTHETIC_ENTITY_CAP_DEPENDENCIES`` AND any required
        field is missing from ``available_fields`` → remove. Synthetic
        entities with empty dependency sets are never auto-removed.
@@ -636,7 +657,20 @@ def _cleanup_orphaned_field_entities(
             removed += 1
             continue
 
-        # Pass 2: synthetic with declared cap dependency.
+        # Pass 2: field deleted from the glossary outright.
+        removed_field = suffix[: -len("_slider")] if suffix.endswith("_slider") else suffix
+        if removed_field in _REMOVED_FIELDS:
+            _LOGGER.info(
+                "Removing orphaned field entity %s (unique_id=%s) — field %r was removed from the glossary",
+                ent.entity_id,
+                ent.unique_id,
+                removed_field,
+            )
+            reg.async_remove(ent.entity_id)
+            removed += 1
+            continue
+
+        # Pass 3: synthetic with declared cap dependency.
         deps = SYNTHETIC_ENTITY_CAP_DEPENDENCIES.get(suffix)
         if deps is None:
             continue  # not in catalog → integration owns it, leave alone

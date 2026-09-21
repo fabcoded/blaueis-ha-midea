@@ -22,6 +22,12 @@ Notable changes to the Blaueis Midea integration.
   close) stay ordinary connection errors and keep retrying.
 
 ### Fixed
+- **Entities of deleted glossary fields are now cleaned up.** The
+  registry sweep only recognised fields still present in the glossary,
+  so an entity whose field had been removed outright (`run_status`,
+  dropped in May) survived as a permanently unavailable `restored`
+  ghost. A `_REMOVED_FIELDS` table now lists such fields and the sweep
+  removes their sensor and any slider on next setup.
 - **Wrong PSK no longer passes validation.** Previously the handshake
   carried no key confirmation, so entry setup succeeded with a wrong
   key and every later message failed to decrypt in a silent retry

@@ -14,7 +14,7 @@ the same object we patched.
 import sys
 from unittest.mock import MagicMock
 
-from custom_components.blaueis_midea import _cleanup_orphaned_field_entities
+from custom_components.blaueis_midea import _REMOVED_FIELDS, _cleanup_orphaned_field_entities
 from custom_components.blaueis_midea.const import CLIMATE_EXCLUSIVE_FIELDS
 
 HOST, PORT = "127.0.0.1", 8765
@@ -147,4 +147,46 @@ def test_orphaned_nonexclusive_field_removed_when_absent():
 def test_available_nonexclusive_field_kept():
     reg = _FakeRegistry([_RegEntry("sensor.it", _uid(NONEXCLUSIVE_FIELD))])
     _run(reg, _coord([NONEXCLUSIVE_FIELD]))  # available
+    assert reg.removed == []
+
+
+# ── Deleted glossary fields (pass 2) ──────────────────────────────────
+
+REMOVED_FIELD = "run_status"
+
+
+def test_removed_field_is_not_a_glossary_field():
+    """Guard the fixture: the listed field really is gone from the glossary,
+    so pass 1 cannot see it — which is exactly the gap pass 2 closes."""
+    from blaueis.core.codec import load_glossary, walk_fields
+
+    assert REMOVED_FIELD in _REMOVED_FIELDS
+    assert REMOVED_FIELD not in set(walk_fields(load_glossary()).keys())
+
+
+def test_removed_field_entity_swept():
+    reg = _FakeRegistry(
+        [
+            _RegEntry("sensor.rs", _uid(REMOVED_FIELD)),
+            _RegEntry("number.rs_slider", _uid(f"{REMOVED_FIELD}_slider")),
+            _RegEntry("sensor.it", _uid(NONEXCLUSIVE_FIELD)),
+        ]
+    )
+    _run(reg, _coord([NONEXCLUSIVE_FIELD, "power"]))
+    assert "sensor.rs" in reg.removed
+    assert "number.rs_slider" in reg.removed
+    assert "sensor.it" not in reg.removed
+
+
+def test_unknown_synthetic_suffix_still_left_alone():
+    # A non-field suffix that is neither a removed field nor in the synthetic
+    # catalog (climate, gw_* stats, <field>_slider) must survive the sweep.
+    reg = _FakeRegistry(
+        [
+            _RegEntry("climate.ac", _uid("climate")),
+            _RegEntry("sensor.gw_cpu", _uid("gw_cpu_percent")),
+            _RegEntry("number.fan", _uid("fan_speed_slider")),
+        ]
+    )
+    _run(reg, _coord(["power", "fan_speed"]))
     assert reg.removed == []
