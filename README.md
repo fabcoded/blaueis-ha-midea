@@ -3,7 +3,7 @@
 Home Assistant custom integration for Midea air conditioners via a
 Blaueis gateway (Raspberry Pi).
 
-**Requires Home Assistant 2024.10+** and a running
+**Requires Home Assistant 2024.12+** and a running
 [blaueis-libmidea](https://github.com/fabcoded/blaueis-libmidea) gateway on
 your network.
 

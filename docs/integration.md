@@ -156,7 +156,7 @@ never present where it would clutter the default view.
 
 ## 1. Requirements
 
-- Home Assistant 2024.10+ (for `type BlaueisMideaConfigEntry = ConfigEntry[...]` syntax).
+- Home Assistant 2024.12+ (for `ClimateEntityFeature.SWING_HORIZONTAL_MODE`, and the `type BlaueisMideaConfigEntry = ConfigEntry[...]` syntax).
 - A running Blaueis gateway reachable from the HA host (see `../blaueis-libmidea/docs/operations.md`).
 - The gateway's **PSK** — the same value configured in the gateway's `gateway.yaml`.
 

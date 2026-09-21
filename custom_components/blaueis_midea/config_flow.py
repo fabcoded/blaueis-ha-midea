@@ -134,8 +134,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Ask for the current PSK and re-validate against the stored gateway."""
-        # context["entry_id"] keeps us on the documented HA 2024.10 floor
-        # (the _get_reauth_entry helper only landed in 2024.11).
+        # context["entry_id"] instead of the _get_reauth_entry helper,
+        # which only landed in 2024.11 — same entry either way.
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         assert entry is not None
         errors: dict[str, str] = {}
@@ -152,9 +152,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception during reauth")
                 errors["base"] = "unknown"
             else:
-                # data= (not data_updates=) — the latter only exists from
-                # HA 2024.11, and the documented floor is 2024.10. The
-                # merged dict is the same either way; the default abort
+                # data= (not data_updates=, which only exists from HA 2024.11)
+                # — the merged dict is the same either way; the default abort
                 # reason is reauth_successful and the entry reloads.
                 return self.async_update_reload_and_abort(entry, data=data)
 
