@@ -149,7 +149,7 @@ Before applying power: no wire runs from AC pin 1 to anything; AC GND, shifter G
 bash -c "$(curl -sL https://raw.githubusercontent.com/fabcoded/blaueis-libmidea/main/scripts/install.sh)"
 ```
 
-It asks for your `sudo` password, then: creates the system user `blaueis-gw` and adds it to `dialout`; clones this repo's `main` branch into `/opt/blaueis-gw` with its own Python venv; creates `/etc/blaueis-gw/` for configuration; installs the systemd template service `blaueis-gateway@<instance>`; links the `blaueis-gw` command into `/usr/local/bin`; and starts the setup wizard. It also repeats the warning from stage 1: the UART must be exclusive.
+It asks for your `sudo` password, then: creates the system user `blaueis-gw` and adds it to `dialout`; clones blaueis-libmidea's `main` branch into `/opt/blaueis-gw` with its own Python venv; creates `/etc/blaueis-gw/` for configuration; installs the systemd template service `blaueis-gateway@<instance>`; links the `blaueis-gw` command into `/usr/local/bin`; and starts the setup wizard. It also repeats the warning from stage 1: the UART must be exclusive.
 
 ### 3.1 The wizard
 
@@ -170,9 +170,9 @@ blaueis-gw status              # your instance shows systemd's "active (running)
 blaueis-gw logs <name> -f      # Ctrl-C to stop following
 ```
 
-In the log you should see, in this order: `Starting gateway v0.1.0 on ws://<host>:8765`, `UART connected`, `DISCOVER: sending SN query (0x07)`, `DISCOVER: found appliance=…`, `MODEL: model=…`, and finally **`ANNOUNCE → RUNNING`** — that line means the AC answered and the handshake is complete.
+In the log you should see, in this order: `Starting gateway <version> on ws://<host>:8765` (`<version>` is the release tag when the gateway was installed from a tag, a short commit hash otherwise), `UART connected`, `DISCOVER: sending SN query (0x07)`, `DISCOVER: found appliance=…`, `MODEL: model=…`, and finally **`ANNOUNCE → RUNNING`** — that line means the AC answered and the handshake is complete.
 
-If instead the log repeats **`DISCOVER: no response, retrying in 5.0s`**, the AC is not answering: switch the AC off, swap the two AC data lines (2.4), switch it on, and watch again. Still nothing: check the AC is powered, the shifter has both references and GND, and the port you picked is the one you wired.
+If instead the log keeps repeating **`DISCOVER: no response to 0x07, trying 0x65`** followed by **`DISCOVER: no response, retrying in 0.3s`**, the AC is not answering: switch the AC off, swap the two AC data lines (2.4), switch it on, and watch again. Still nothing: check the AC is powered, the shifter has both references and GND, and the port you picked is the one you wired.
 
 If the instance is not running at all, `blaueis-gw logs <name>` shows why: a serial port that is missing or denied means stage 1 was skipped or the wrong port was chosen; a WebSocket port already in use means another program has 8765. To change either, run `blaueis-gw configure`, then `sudo systemctl restart blaueis-gateway@<name>` — and remember a changed port for stage 5.
 
@@ -191,6 +191,8 @@ If the instance is not running at all, `blaueis-gw logs <name>` shows why: a ser
 1. **HACS → ⋮ → Custom repositories.** Add `https://github.com/fabcoded/blaueis-ha-midea`, type **Integration**.
 2. Search **Blaueis Midea AC** and download it.
 3. **Restart Home Assistant.**
+
+`hacs.json` and the HACS validation ship with the 0.1.0 release; until it is out, install manually instead ([docs/integration.md](docs/integration.md#22-manual)).
 
 **Checkpoint.** Settings → Devices & Services → Add Integration → search `Blaueis` shows **Blaueis Midea AC**. If it is missing, the download did not complete or HA has not restarted yet.
 
@@ -215,7 +217,7 @@ If the instance is not running at all, `blaueis-gw logs <name>` shows why: a ser
 **Checkpoint — what you should now see.** Two devices under the new entry:
 
 - **Your AC** — a climate entity (mode, target temperature, fan speed, swing, presets) plus sensors and switches for what the unit supports. Only capabilities the unit itself advertises appear, so the list differs between models — a shorter list than someone else's is normal.
-- **The gateway** — Pi health sensors and the gateway version (the release tag, e.g. `v0.1.0`).
+- **The gateway** — Pi health sensors and the gateway version (the release tag when installed from a tag, a short commit hash otherwise).
 
 Set a target temperature on the climate entity; the AC should follow. One config entry corresponds to one gateway instance. If the gateway's PSK changes later, Home Assistant asks you to re-authenticate.
 

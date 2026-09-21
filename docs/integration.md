@@ -166,7 +166,7 @@ Python dependencies pulled by the manifest: `websockets>=12.0`, `pyyaml>=6.0`, `
 
 ## 2. Install
 
-### 2.1 HACS (preferred once published)
+### 2.1 HACS (custom repository, from the 0.1.0 release)
 
 Add the repository as a custom HACS source, install **Blaueis Midea AC**, restart HA.
 
@@ -394,7 +394,7 @@ To fix, work through §7.1's `cannot_connect` causes.
 
 ### 7.6 Slot-pool exhaustion
 
-`{"code":"slot_pool_full"}` error → more than `slot_pool_size` (default 8) concurrent WS clients on the gateway. Usually a stuck test client. Close idle clients, or raise the pool in gateway config. See `../blaueis-libmidea/docs/operations.md` §3.2.
+`{"code":"slot_pool_full"}` error → more than `slot_pool_size` (default 8) concurrent WS clients on the gateway. Usually a stuck test client. Close idle clients, or raise the pool in gateway config. See `../blaueis-libmidea/docs/operations.md` §4.2.
 
 ---
 

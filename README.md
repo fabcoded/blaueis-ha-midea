@@ -77,6 +77,8 @@ by default to keep the UI clean.
 2. Search **Blaueis Midea AC** and download it.
 3. **Restart Home Assistant.**
 
+`hacs.json` and the HACS validation ship with the 0.1.0 release; until it is out, use the manual installation below.
+
 Then **Settings → Devices & Services → Add Integration → Blaueis Midea AC**,
 enter host / port / PSK.
 
