@@ -660,11 +660,11 @@ def _cleanup_orphaned_field_entities(
        this pass.
 
        ``<field>_slider`` numbers are judged by their base field: removed
-       when the field is no longer in ``available_fields``, or when it is
-       climate-exclusive and its active cap no longer carries a
-       ``slider:`` block (the retired louver-angle sliders); kept
-       otherwise. A climate-exclusive field that still has a slider block
-       keeps it — the number platform builds that slider on purpose
+       when the field is no longer in ``available_fields``, or when its
+       active cap no longer carries a ``slider:`` block (the retired
+       louver-angle sliders) — the number platform builds a slider for
+       exactly the available fields whose cap has one, so anything else
+       would never be recreated. Kept otherwise, climate-exclusive or not
        (``fan_speed``: preset dropdown on the climate entity, free-range
        slider alongside).
 
@@ -704,15 +704,13 @@ def _cleanup_orphaned_field_entities(
         # Pass 1b: `<field>_slider` numbers follow their base field. The
         # number platform builds a slider for any available field whose
         # active cap carries a `slider:` block — climate-exclusive ones
-        # included (fan_speed) — so exclusivity alone must not remove it.
+        # included (fan_speed) — so a slider without either is a ghost.
         slider_base = suffix[: -len("_slider")] if suffix.endswith("_slider") else None
         if slider_base in all_field_names:
             if slider_base not in available:
                 reason = "no longer in available_fields"
-            elif slider_base in CLIMATE_EXCLUSIVE_FIELDS and not _has_slider_block(
-                coordinator.device.available_fields[slider_base]
-            ):
-                reason = "climate-exclusive and its cap has no slider"
+            elif not _has_slider_block(coordinator.device.available_fields[slider_base]):
+                reason = "its cap has no slider"
             else:
                 continue  # the number platform still builds this slider
             _LOGGER.info(

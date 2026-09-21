@@ -137,6 +137,7 @@ async def test_setup_unreachable_gateway_retries_and_stops_the_device(hass: Home
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason="Bug: a failed setup never detaches its debug ring, every retry stacks another (up to 5 MB each).",
 )
 async def test_failed_setup_does_not_leak_a_debug_ring(hass: HomeAssistant, mock_config_entry) -> None:
@@ -321,6 +322,7 @@ async def test_rename_targets_are_not_themselves_renamed() -> None:
 
 @pytest.mark.xfail(
     strict=True,
+    raises=ValueError,
     reason="Bug: when the renamed unique_id already exists, async_update_entity raises and setup fails.",
 )
 async def test_migration_tolerates_an_existing_target(hass: HomeAssistant, mock_config_entry) -> None:

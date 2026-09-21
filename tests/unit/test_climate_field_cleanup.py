@@ -229,12 +229,13 @@ def test_slider_of_available_nonexclusive_field_kept():
     assert reg.removed == []
 
 
-def test_slider_of_available_nonexclusive_field_without_slider_block_kept():
-    # "kept otherwise": pass 1 only removes a slider for unavailability or
-    # climate exclusivity, not for a missing slider block on its own.
+def test_slider_of_available_nonexclusive_field_without_slider_block_removed():
+    # The number platform builds a slider only where the cap has a slider
+    # block, whatever the field's climate exclusivity — without one, nothing
+    # would rebuild the number.
     reg = _FakeRegistry([_RegEntry("number.it_slider", _uid(f"{NONEXCLUSIVE_FIELD}_slider"))])
     _run(reg, _coord([NONEXCLUSIVE_FIELD]))
-    assert reg.removed == []
+    assert reg.removed == ["number.it_slider"]
 
 
 def test_slider_of_climate_exclusive_field_without_slider_block_removed():

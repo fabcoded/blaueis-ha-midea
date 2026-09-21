@@ -375,6 +375,8 @@ When the gateway cannot be reached at setup (HA start, entry reload), the entry 
 
 It clears itself: the next successful setup deletes it (so does an auth failure, which proves the gateway is reachable and hands over to the reauth flow, and deleting the entry). The 15-minute clock is kept in memory, so it restarts after an HA restart, and it restarts after every successful connection. Only setup-time outages are covered — a gateway that drops out while the entry is loaded shows as unavailable entities, not as an issue.
 
+One case does not clear it: if you **disable** the entry while it is still retrying, HA cancels the retry without calling the integration, so the issue stays in Repairs until the next HA restart (HA reloads it as inactive then). Deleting the entry, or a setup that finally succeeds, clears it as described above.
+
 To fix, work through §7.1's `cannot_connect` causes.
 
 ### 7.3 Integration loads but no entities appear

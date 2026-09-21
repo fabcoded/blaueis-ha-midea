@@ -40,8 +40,8 @@ Notable changes to the Blaueis Midea integration.
   skipped every `<field>_slider` number, so a slider whose field left
   `available_fields` survived as a permanently unavailable ghost. Sliders
   now follow their base field: removed when the field is no longer
-  available, or when it is climate-exclusive and its cap no longer offers
-  a slider (the retired louver-angle sliders). The fan-speed slider, which
+  available, or when its cap no longer offers a slider (the retired
+  louver-angle sliders), climate-exclusive or not. The fan-speed slider, which
   sits alongside the climate entity's fan-mode dropdown on purpose, is kept.
 - **Configure dialog saves without a Follow Me sensor.** The Follow Me
   source field was rendered with an empty default the entity selector
