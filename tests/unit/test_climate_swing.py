@@ -7,8 +7,10 @@ exclusive, so a tap sends exactly one field and the firmware enforces the
 exclusion by clearing the sibling.
 
 These tests cover the pure mapping across every capability combination, the
-single-field-per-tap invariant, and tie the position grid back to the real
-glossary so the HA option strings and the codec values can't silently drift.
+single-field-per-write invariant (every option is one write, except releasing
+a fixed vane position: swing on, then off — the firmware ignores angle=0), and
+tie the position grid back to the real glossary so the HA option strings and
+the codec values can't silently drift.
 """
 
 import pytest
@@ -109,22 +111,22 @@ def test_mode_roundtrips_set(axis, pos):
     sw, ang = _fields(axis)
     avail = _avail(sw, ang)
     for opt in [SWING_ON, *pos]:
-        ch = axis_set_changes(axis, opt, avail, _reader({}))
+        (ch,) = axis_set_changes(axis, opt, avail, _reader({}))
         assert axis_mode(axis, avail, _reader(ch)) == opt
 
 
-# ── axis_set_changes: exactly one field per tap ───────────────────────────
+# ── axis_set_changes: single-field writes ─────────────────────────────────
 @pytest.mark.parametrize("axis", AXES)
 def test_set_swing_writes_only_swing(axis):
     sw, ang = _fields(axis)
-    assert axis_set_changes(axis, SWING_ON, _avail(sw, ang), _reader({})) == {sw: SWING_ON_RAW}
+    assert axis_set_changes(axis, SWING_ON, _avail(sw, ang), _reader({})) == [{sw: SWING_ON_RAW}]
 
 
 @pytest.mark.parametrize("axis,pos", AXIS_POS)
 def test_set_position_writes_only_angle(axis, pos):
     sw, ang = _fields(axis)
     for raw, opt in zip(RAWS, pos, strict=False):
-        assert axis_set_changes(axis, opt, _avail(sw, ang), _reader({})) == {ang: raw}
+        assert axis_set_changes(axis, opt, _avail(sw, ang), _reader({})) == [{ang: raw}]
 
 
 @pytest.mark.parametrize("axis", AXES)
@@ -132,15 +134,53 @@ def test_set_off_clears_active_swing(axis):
     sw, ang = _fields(axis)
     # Currently swinging -> off clears the swing field (one field).
     ch = axis_set_changes(axis, SWING_OFF, _avail(sw, ang), _reader({sw: SWING_ON_RAW}))
-    assert ch == {sw: 0}
+    assert ch == [{sw: 0}]
 
 
 @pytest.mark.parametrize("axis", AXES)
-def test_set_off_clears_active_angle(axis):
+@pytest.mark.parametrize("raw", RAWS)
+def test_set_off_releases_fixed_angle_through_swing(axis, raw):
     sw, ang = _fields(axis)
-    # Currently at a fixed position (not swinging) -> off clears the angle field.
-    ch = axis_set_changes(axis, SWING_OFF, _avail(sw, ang), _reader({sw: 0, ang: 50}))
-    assert ch == {ang: 0}
+    # At a fixed position (not swinging): the firmware ignores angle=0, so off
+    # engages swing (which clears the angle) and then stops it — in that order.
+    ch = axis_set_changes(axis, SWING_OFF, _avail(sw, ang), _reader({sw: 0, ang: raw}))
+    assert ch == [{sw: SWING_ON_RAW}, {sw: 0}]
+
+
+@pytest.mark.parametrize("axis", AXES)
+def test_release_sequence_ends_off(axis):
+    """Applying the two writes in order leaves the axis reading "off"."""
+    sw, ang = _fields(axis)
+    avail = _avail(sw, ang)
+    state = {sw: 0, ang: 50}
+    for write in axis_set_changes(axis, SWING_OFF, avail, _reader(state)):
+        state.update(write)
+        if write.get(sw):  # firmware: swing on clears the fixed angle
+            state[ang] = 0
+    assert axis_mode(axis, avail, _reader(state)) == SWING_OFF
+
+
+@pytest.mark.parametrize("axis", AXES)
+def test_set_off_without_swing_cap_falls_back_to_angle_zero(axis):
+    sw, ang = _fields(axis)
+    # Angle-only unit: no swing field to release through -> single angle=0.
+    ch = axis_set_changes(axis, SWING_OFF, _avail(ang), _reader({ang: 50}))
+    assert ch == [{ang: 0}]
+
+
+@pytest.mark.parametrize("axis", AXES)
+@pytest.mark.parametrize("start", [{}, {"sw": 0, "ang": 0}])
+def test_set_off_when_nothing_active_is_one_write(axis, start):
+    sw, ang = _fields(axis)
+    state = {sw if k == "sw" else ang: v for k, v in start.items()}
+    ch = axis_set_changes(axis, SWING_OFF, _avail(sw, ang), _reader(state))
+    assert ch == [{ang: 0}]
+
+
+@pytest.mark.parametrize("axis", AXES)
+def test_set_off_swing_only_unit(axis):
+    sw, _ang = _fields(axis)
+    assert axis_set_changes(axis, SWING_OFF, _avail(sw), _reader({sw: 0})) == [{sw: 0}]
 
 
 @pytest.mark.parametrize("axis", AXES)
@@ -156,16 +196,19 @@ def test_set_unsupported_returns_none(axis):
 
 
 @pytest.mark.parametrize("axis", AXES)
-def test_every_option_is_single_field(axis):
-    """The core invariant: every offered option writes exactly one field,
-    from any starting state."""
+def test_every_write_is_single_field(axis):
+    """The core invariant: every write touches exactly one field, from any
+    starting state, and only the fixed-position release takes two writes."""
     sw, ang = _fields(axis)
     avail = _avail(sw, ang)
     for start in ({sw: SWING_ON_RAW}, {sw: 0, ang: 50}, {}):
         for opt in axis_options(axis, avail):
-            ch = axis_set_changes(axis, opt, avail, _reader(start))
-            assert ch is not None, f"{opt!r} unexpectedly unsupported"
-            assert len(ch) == 1, f"{opt!r} wrote {ch!r} (must be single-field)"
+            writes = axis_set_changes(axis, opt, avail, _reader(start))
+            assert writes is not None, f"{opt!r} unexpectedly unsupported"
+            releasing = opt == SWING_OFF and start == {sw: 0, ang: 50}
+            assert len(writes) == (2 if releasing else 1), f"{opt!r} from {start!r} wrote {writes!r}"
+            for w in writes:
+                assert len(w) == 1, f"{opt!r} wrote {w!r} (must be single-field)"
 
 
 # ── Glossary consistency: HA grid must equal the codec values ─────────────

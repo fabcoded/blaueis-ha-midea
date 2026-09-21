@@ -6,7 +6,11 @@ leaves available_fields after setup, the offered options shrink immediately and
 the dropdown can never offer a vane position the set path then rejects.
 """
 
+import asyncio
 from unittest.mock import MagicMock
+
+import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.blaueis_midea.climate import BlaueisMideaClimate
 
@@ -57,3 +61,41 @@ def test_swing_modes_none_when_feature_absent():
     ent = _entity({"fan_speed": {}})
     assert ent.swing_modes is None
     assert ent.swing_horizontal_modes is None
+
+
+# ── _set_axis: the write sequence reaches the device in order ─────────────
+
+
+def _settable(avail, state, results=None):
+    ent = _entity(avail)
+    dev = ent._device
+    dev.read = lambda name: state.get(name)
+    calls = []
+    results = list(results or [])
+
+    async def _set(**changes):
+        calls.append(changes)
+        return results.pop(0) if results else {}
+
+    dev.set = _set
+    return ent, calls
+
+
+def test_set_axis_releases_fixed_position_with_two_writes():
+    ent, calls = _settable({V_SWING: {}, V_ANGLE: {}}, {V_SWING: 0, V_ANGLE: 50})
+    asyncio.run(ent.async_set_swing_mode("off"))
+    assert calls == [{V_SWING: 3}, {V_SWING: 0}]
+
+
+def test_set_axis_single_write_otherwise():
+    ent, calls = _settable({H_SWING: {}, H_ANGLE: {}}, {H_SWING: 3})
+    asyncio.run(ent.async_set_swing_horizontal_mode("off"))
+    assert calls == [{H_SWING: 0}]
+
+
+def test_set_axis_rejected_first_write_stops_the_sequence():
+    rejected = {"rejected": {V_SWING: "not_in_mode:heat"}}
+    ent, calls = _settable({V_SWING: {}, V_ANGLE: {}}, {V_SWING: 0, V_ANGLE: 50}, [rejected])
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(ent.async_set_swing_mode("off"))
+    assert calls == [{V_SWING: 3}]

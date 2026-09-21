@@ -2,8 +2,9 @@
 
 The climate entity folds oscillation ("swing") and the fixed vane positions
 into one enum per axis (``swing_mode`` = vertical, ``swing_horizontal_mode`` =
-horizontal). On the hardware the two are mutually exclusive, so we send only
-the touched field; the firmware enforces the exclusion and clears the sibling.
+horizontal). On the hardware the two are mutually exclusive, so each write
+sends only the touched field; the firmware enforces the exclusion and clears
+the sibling. Releasing a fixed position is the one two-write sequence.
 
 These functions take the device's ``available_fields`` (a mapping; only keys
 are read) and a ``read(field) -> raw`` callable, so they're trivially testable
@@ -59,25 +60,31 @@ def axis_set_changes(
     option: str,
     available_fields: Mapping[str, Any],
     read: Callable[[str], Any],
-) -> dict[str, int] | None:
-    """The SINGLE-field ``{field: raw}`` write for selecting ``option`` on an
-    axis, or ``None`` if the option isn't supported by this unit's caps.
+) -> list[dict[str, int]] | None:
+    """The writes for selecting ``option`` on an axis, in order, or ``None``
+    if the option isn't supported by this unit's caps.
 
-    Never returns more than one field — the firmware clears the mutually
-    exclusive sibling. ``"off"`` clears whichever mode is currently active.
+    Each write is a SINGLE-field ``{field: raw}`` — the firmware clears the
+    mutually exclusive sibling. Every option is one write except releasing
+    a fixed vane position: the firmware ignores ``angle=0``, so ``"off"``
+    from a fixed position engages swing and then stops it (two writes).
+    Without a swing cap there is nothing to release through, and ``"off"``
+    falls back to the single ``angle=0`` write.
     """
     f = SWING_AXES[axis]
     label_to_raw = {label: raw for raw, label in POS_LABELS[axis].items()}
 
     if option == SWING_ON and f["swing"] in available_fields:
-        return {f["swing"]: SWING_ON_RAW}
+        return [{f["swing"]: SWING_ON_RAW}]
     if option in label_to_raw and f["angle"] in available_fields:
-        return {f["angle"]: label_to_raw[option]}
+        return [{f["angle"]: label_to_raw[option]}]
     if option == SWING_OFF:
-        # Clear whichever mode is active — still exactly one field.
-        if f["swing"] in available_fields and read(f["swing"]) not in (None, 0, False):
-            return {f["swing"]: 0}
+        has_swing = f["swing"] in available_fields
+        if has_swing and read(f["swing"]) not in (None, 0, False):
+            return [{f["swing"]: 0}]
         if f["angle"] in available_fields:
-            return {f["angle"]: 0}
-        return {f["swing"]: 0}
+            if has_swing and read(f["angle"]) in POS_LABELS[axis]:
+                return [{f["swing"]: SWING_ON_RAW}, {f["swing"]: 0}]
+            return [{f["angle"]: 0}]
+        return [{f["swing"]: 0}]
     return None

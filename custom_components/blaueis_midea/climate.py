@@ -296,14 +296,17 @@ class BlaueisMideaClimate(ClimateEntity):
         return axis_mode(axis, self._device.available_fields, self._device.read)
 
     async def _set_axis(self, axis: str, option: str) -> None:
-        """Set one axis with a SINGLE field write; the firmware enforces the
-        exclusion and clears the mutually-exclusive sibling."""
-        changes = axis_set_changes(axis, option, self._device.available_fields, self._device.read)
-        if changes is None:
+        """Set one axis with single-field writes, in order (one write, except
+        releasing a fixed vane position: swing on, then off). The firmware
+        enforces the exclusion and clears the mutually-exclusive sibling. A
+        rejected write stops the sequence."""
+        writes = axis_set_changes(axis, option, self._device.available_fields, self._device.read)
+        if writes is None:
             _LOGGER.warning("blaueis: ignoring unsupported %s swing option %r", axis, option)
             return
-        result = await self._device.set(**changes)
-        check_set_result(result, primary_fields=set(changes))
+        for changes in writes:
+            result = await self._device.set(**changes)
+            check_set_result(result, primary_fields=set(changes))
 
     @property
     def swing_modes(self) -> list[str] | None:

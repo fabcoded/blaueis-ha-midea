@@ -27,6 +27,11 @@ Notable changes to the Blaueis Midea integration.
   close) stay ordinary connection errors and keep retrying.
 
 ### Fixed
+- **Swing "off" releases a fixed vane position.** Selecting `off` while
+  the vane was parked at a fixed position wrote an angle reset the
+  firmware ignores, so the vane stayed put. It now engages swing and then
+  stops it (two writes). Units without a swing capability keep the old
+  single write.
 - **Stale slider numbers are now cleaned up.** The registry sweep
   skipped every `<field>_slider` number, so a slider whose field left
   `available_fields` survived as a permanently unavailable ghost. Sliders

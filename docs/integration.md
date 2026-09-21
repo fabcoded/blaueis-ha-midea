@@ -245,6 +245,9 @@ A single aggregate entity, unlike the per-field entities above. Absorbs fields l
 - `fan_speed` → fan_mode (mapped via `DEFAULT_FAN_PRESETS` → auto / low / medium / high).
 - `indoor_temperature` → current_temp (also surfaced separately as a `sensor`).
 - `swing_vertical`, `swing_horizontal` → swing_mode.
+  Choosing `off` while the vane is parked at a fixed position sends two
+  writes — swing on, then swing off — because the firmware ignores a
+  plain angle reset; every other choice is a single write.
 - Preset fields (`turbo_mode`, `eco_mode`, `sleep_mode`, `frost_protection`) → HA preset.
 
 Callback fields — changes to any of `CLIMATE_CALLBACK_FIELDS` refresh the climate entity state.
