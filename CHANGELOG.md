@@ -32,6 +32,15 @@ Notable changes to the Blaueis Midea integration.
   close) stay ordinary connection errors and keep retrying.
 
 ### Fixed
+- **A failed setup no longer leaks its debug ring.** The in-memory debug
+  log was attached before the gateway connect but only detached on
+  unload, which HA never runs for a setup that failed — so every retry
+  against an unreachable gateway stacked another handler (up to 5 MB
+  each). Every failed setup path now detaches it.
+- **Field-rename migration survives a duplicate.** When both the old and
+  the renamed unique_id were registered, the migration raised and setup
+  failed. It now keeps the entity that already has the new id, removes
+  the stale one, and logs a warning.
 - **No false "connected" after the gateway restarts.** A gateway restart
   could leave the integration showing "connected" for a link that had
   already dropped, and a reconnect could send one plaintext message

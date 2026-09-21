@@ -137,7 +137,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
 
     # Pre-load glossary in executor to avoid blocking the event loop
     from blaueis.core.codec import load_glossary
-    from blaueis.core.crypto import AuthenticationError, HandshakeError, psk_to_bytes
+    from blaueis.core.crypto import psk_to_bytes
 
     await hass.async_add_executor_job(load_glossary)
 
@@ -151,6 +151,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry)
     _migrate_fmf_keys(hass, entry)
 
     debug_ring = _install_debug_ring(entry)
+    # HA runs no unload for a setup that raised, so every failure path —
+    # ConfigEntryNotReady, auth failure, anything else — detaches the ring
+    # here. Otherwise each retry would stack another handler on the loggers.
+    try:
+        return await _async_setup_connected(hass, entry, host, port, psk, debug_ring)
+    except BaseException:
+        _uninstall_debug_ring(entry)
+        raise
+
+
+async def _async_setup_connected(
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
+    host: str,
+    port: int,
+    psk: str | bytes,
+    debug_ring,
+) -> bool:
+    """Build the coordinator, connect, and load the platforms. Split from
+    async_setup_entry so the debug ring's failure-path cleanup wraps it."""
+    from blaueis.core.crypto import AuthenticationError, HandshakeError
 
     # Parse any persisted glossary override (validated on save in
     # config_flow; we re-parse here as the authoritative source). If
@@ -462,12 +483,14 @@ def _migrate_renamed_unique_ids(
     """Rewrite entity_registry unique_ids for fields whose canonical name
     changed in the glossary.
 
-    Unique_ids are of the form ``{host}_{port}_{field_name}``. For every
+    Unique_ids are of the form ``{prefix}{field_name}``. For every
     entry in ``_FIELD_RENAMES`` this walks the registry, finds entities
     whose unique_id ends with ``_<old_name>`` and belongs to this
     config_entry, and rewrites the tail to ``_<new_name>``. Entity_id,
     history, and dashboards / automations referencing the entity_id are
-    preserved by HA's registry semantics.
+    preserved by HA's registry semantics. A collision (the new unique_id
+    is already registered) keeps the entity that has the new id and
+    removes the stale one — see ``_rewrite_unique_id``.
 
     Safe to run on every setup — idempotent once no old unique_ids remain.
     """
@@ -476,7 +499,7 @@ def _migrate_renamed_unique_ids(
     if not _FIELD_RENAMES:
         return
     reg = er.async_get(hass)
-    renamed = 0
+    renamed = removed = 0
     for ent in list(reg.entities.values()):
         if ent.config_entry_id != entry.entry_id:
             continue
@@ -484,17 +507,42 @@ def _migrate_renamed_unique_ids(
             old_suffix = f"_{old_name}"
             if ent.unique_id.endswith(old_suffix):
                 new_uid = ent.unique_id[: -len(old_suffix)] + f"_{new_name}"
-                reg.async_update_entity(ent.entity_id, new_unique_id=new_uid)
-                _LOGGER.info(
-                    "Migrated unique_id: %s %s → %s",
-                    ent.entity_id,
-                    ent.unique_id,
-                    new_uid,
-                )
-                renamed += 1
+                if _rewrite_unique_id(reg, ent, new_uid):
+                    renamed += 1
+                else:
+                    removed += 1
                 break
-    if renamed:
-        _LOGGER.info("Field-rename migration: %d entity ids updated", renamed)
+    if renamed or removed:
+        _LOGGER.info(
+            "Field-rename migration: %d entity ids updated, %d stale duplicates removed",
+            renamed,
+            removed,
+        )
+
+
+def _rewrite_unique_id(reg, ent, new_uid: str) -> bool:
+    """Give registry entry ``ent`` the unique_id ``new_uid`` in place.
+
+    When ``new_uid`` is already registered (old and new id both present —
+    e.g. the new-id entity was created before the migration ran), the
+    entity that already has the new id wins and the stale ``ent`` is
+    removed; one warning is logged and nothing is raised. Returns True
+    when ``ent`` was rewritten, False when it was removed as a duplicate.
+    """
+    existing = reg.async_get_entity_id(ent.domain, ent.platform, new_uid)
+    if existing is None:
+        reg.async_update_entity(ent.entity_id, new_unique_id=new_uid)
+        _LOGGER.info("Migrated unique_id: %s %s → %s", ent.entity_id, ent.unique_id, new_uid)
+        return True
+    _LOGGER.warning(
+        "unique_id migration: %s (%s) is a stale duplicate of %s (%s) — removing it",
+        ent.entity_id,
+        ent.unique_id,
+        existing,
+        new_uid,
+    )
+    reg.async_remove(ent.entity_id)
+    return False
 
 
 # ── Glossary override helpers ──────────────────────────────────────────

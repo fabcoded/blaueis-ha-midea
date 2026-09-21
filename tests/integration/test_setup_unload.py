@@ -78,8 +78,8 @@ async def _setup(hass: HomeAssistant, entry, **options) -> AsyncMock:
 @pytest.fixture(autouse=True)
 def _detach_debug_rings():
     """The debug ring hangs off process-global loggers, and other test
-    modules leave theirs behind (see the leak xfail below) — detach every
-    ring before and after each test so handler counts start at zero."""
+    modules leave theirs behind — detach every ring before and after each
+    test so handler counts start at zero."""
 
     def _detach() -> None:
         for name in integration._RING_LOGGERS:
@@ -135,14 +135,10 @@ async def test_setup_unreachable_gateway_retries_and_stops_the_device(hass: Home
     device_stop.assert_awaited()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Bug: a failed setup never detaches its debug ring, every retry stacks another (up to 5 MB each).",
-)
 async def test_failed_setup_does_not_leak_a_debug_ring(hass: HomeAssistant, mock_config_entry) -> None:
-    """The ring is installed before the gateway connect and only removed by
-    async_unload_entry, which HA never calls for a setup that raised."""
+    """The ring is installed before the gateway connect, and HA never calls
+    async_unload_entry for a setup that raised — so the failure path itself
+    must detach it, or every retry stacks another handler."""
     mock_config_entry.add_to_hass(hass)
     with patch(_START, AsyncMock(side_effect=OSError("refused"))):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -153,6 +149,41 @@ async def test_failed_setup_does_not_leak_a_debug_ring(hass: HomeAssistant, mock
 
     assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
     assert _ring_handlers() == []
+
+
+def _auth_error() -> Exception:
+    from blaueis.core.crypto import AuthenticationError
+
+    return AuthenticationError("key confirmation failed")
+
+
+@pytest.mark.parametrize(
+    ("start_error", "forward_error"),
+    [
+        (_auth_error, None),
+        (lambda: RuntimeError("boom"), None),
+        # Past the connect: a platform forward that raises.
+        (None, lambda: RuntimeError("platform crashed")),
+    ],
+    ids=["auth_failure", "exception_in_connect", "exception_after_connect"],
+)
+async def test_every_failed_setup_path_detaches_the_debug_ring(
+    hass: HomeAssistant, mock_config_entry, start_error, forward_error
+) -> None:
+    mock_config_entry.add_to_hass(hass)
+    start = AsyncMock(side_effect=start_error() if start_error else None)
+    forward = AsyncMock(side_effect=forward_error() if forward_error else None)
+    with (
+        patch(_START, start),
+        patch(_DEVICE_STOP, AsyncMock()),
+        patch.object(hass.config_entries, "async_forward_entry_setups", forward),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+    for name in integration._RING_LOGGERS:
+        assert _ring_handlers(name) == []
 
 
 async def test_setup_autostarts_follow_me_when_configured_and_enabled(hass: HomeAssistant, mock_config_entry) -> None:
@@ -320,20 +351,23 @@ async def test_rename_targets_are_not_themselves_renamed() -> None:
     assert not set(integration._FIELD_RENAMES.values()) & set(integration._FIELD_RENAMES)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=ValueError,
-    reason="Bug: when the renamed unique_id already exists, async_update_entity raises and setup fails.",
-)
-async def test_migration_tolerates_an_existing_target(hass: HomeAssistant, mock_config_entry) -> None:
+async def test_migration_tolerates_an_existing_target(hass: HomeAssistant, mock_config_entry, caplog) -> None:
     """Both the old and the new unique_id registered (e.g. the new-name
-    entity was created before the rename entry landed): the migration must
-    not crash setup. Leaving the old entity for the orphan sweep is fine."""
+    entity was created before the rename entry landed): the entity that
+    already has the new id is kept, the stale old-id one is removed, one
+    warning is logged, and nothing raises."""
     mock_config_entry.add_to_hass(hass)
-    _register(hass, mock_config_entry, "sensor", "total_power_kwh", "ac_old_energy")
-    _register(hass, mock_config_entry, "sensor", "power_total_kwh", "ac_new_energy")
+    stale = _register(hass, mock_config_entry, "sensor", "total_power_kwh", "ac_old_energy")
+    current = _register(hass, mock_config_entry, "sensor", "power_total_kwh", "ac_new_energy")
 
     integration._migrate_renamed_unique_ids(hass, mock_config_entry)
+    integration._migrate_renamed_unique_ids(hass, mock_config_entry)
+
+    reg = er.async_get(hass)
+    assert reg.async_get(stale.entity_id) is None
+    assert _uid_of(hass, current.entity_id) == f"{PREFIX}power_total_kwh"
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "stale duplicate" in r.message]
+    assert len(warnings) == 1
 
 
 async def test_setup_runs_the_migration(hass: HomeAssistant, mock_config_entry) -> None:
