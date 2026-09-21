@@ -20,7 +20,7 @@ Home Assistant  <-- WebSocket, port 8765 -->  Raspberry Pi gateway  <-- UART 960
 
 ## Before you start
 
-- **A Raspberry Pi with the 40-pin header**, any model (Pi 5 needs one extra config line, 1.3), with **its own 5.1 V power supply**.
+- **A Raspberry Pi with the 40-pin header**, any model (Pi 5 needs one extra config line — untested, 1.3), with **its own 5.1 V power supply**.
 - **Raspberry Pi OS Bookworm or newer.** The gateway needs Python 3.11+; Bullseye ships 3.9 and will not work. `git` and `sudo` must be available.
 - **A bidirectional 5 V ↔ 3.3 V level shifter.** Mandatory: the Pi's UART pins are 3.3 V and are damaged by 5 V, and the AC ignores 3.3 V drive. A common bidirectional module of the BSS138 type with two or more channels should work; no specific part is verified yet.
 - **A multimeter** (DC volts) for the one check in 2.1.
@@ -62,13 +62,15 @@ Find your model with `cat /proc/device-tree/model`.
   sudo systemctl disable hciuart
   ```
 
+  To keep Bluetooth instead: `dtoverlay=miniuart-bt` plus `core_freq=250` in the same file — untested here, so prefer `disable-bt`.
+
 - **Pi 5** — `/dev/serial0` is the 3-pin debug header, not pins 8/10. Enable the header UART instead:
 
   ```sh
   echo "dtoverlay=uart0-pi5" | sudo tee -a /boot/firmware/config.txt
   ```
 
-  and choose **`/dev/ttyAMA0`** in the wizard (3.1).
+  and set `uart_port: /dev/ttyAMA0` (the wizard asks for the port, 3.1). Bluetooth has its own UART on the Pi 5, so `disable-bt` is not needed. **Untested** — derived from the Raspberry Pi documentation, not run on a Pi 5.
 
 - **Other models with the 40-pin header** — no extra step.
 
@@ -85,7 +87,7 @@ ls -l /dev/serial0        # on a Pi 5: ls -l /dev/ttyAMA0
 hostname -I               # note the first address — Home Assistant needs it in stage 5
 ```
 
-**Checkpoint.** `/dev/serial0` is printed as a symlink. On the models in 1.3 it must point at **`ttyAMA0`**; if it points at `ttyS0`, Bluetooth still holds the UART — repeat 1.3. `No such file or directory` means the serial hardware is not enabled — repeat 1.2. On a Pi 5, `/dev/ttyAMA0` must exist. Power the Pi down before stage 2.
+**Checkpoint.** `/dev/serial0` is printed as a symlink. On the models in 1.3 it must point at **`ttyAMA0`**; if it points at `ttyS0`, Bluetooth still holds the UART — repeat 1.3. `No such file or directory` means the serial hardware is not enabled — repeat 1.2. On a Pi 5 (untested), `/dev/ttyAMA0` must exist. Power the Pi down before stage 2.
 
 ## 2. Wire the Pi to the AC
 
@@ -108,13 +110,15 @@ The socket is either **USB-A-shaped** (sometimes keyed) or a **4-pin JST-XH** he
 
 **Identify the pins before wiring.** With the indoor unit powered and *nothing* connected to CN3, set the multimeter to DC volts and measure between pin 1 and pin 4: you should read about 5 V. The board next to CN3 carries mains — touch only the CN3 pins. If you do not read about 5 V, you have the wrong pins or the wrong connector: stop and ask (see *Where to ask*). Then switch the AC off at the mains before you wire.
 
-> **Honest gap.** We do not yet have a photo or pinout of CN3 on a specific unit, the exact mating connector part, or a tested level-shifter part number. If you identify these for your unit, open an issue with a photo of the socket and the indoor unit's model label — that is exactly what is needed to close this gap for the next person.
+> **Honest gap.** We do not yet have a photo or pinout of CN3 on a specific unit, the exact mating connector part, which of pins 2 and 3 is the AC's TX, the port's real current capability, or a tested level-shifter part number. If you identify these for your unit, open an issue with a photo of the socket and the indoor unit's model label — that is exactly what is needed to close this gap for the next person.
 
 ### 2.2 Power: the Pi gets its own supply
 
 The AC's dongle port is rated **5 V / 300 mA**. A Pi draws roughly **100 mA to 800 mA** depending on the model. Power the Pi from its own 5.1 V supply, share **GND only**, and leave **CN3 pin 1 (5 V) unconnected**.
 
 ### 2.3 The Pi side: the primary UART
+
+`/dev/serial0` is the symlink to this UART, on header pins 8 and 10 on every model except the Pi 5 (1.3).
 
 | Header pin | Signal |
 |---|---|
@@ -155,7 +159,7 @@ It asks for your `sudo` password, then: creates the system user `blaueis-gw` and
 
 | Prompt | What to answer |
 |---|---|
-| Serial port (lists what it detected: `/dev/serial0`, `/dev/ttyAMA0`, `/dev/ttyUSB0`, …) | `/dev/serial0` — on a Pi 5 with the overlay from 1.3, `/dev/ttyAMA0` |
+| Serial port (lists what it detected: `/dev/serial0`, `/dev/ttyAMA0`, `/dev/ttyUSB0`, …) | `/dev/serial0` — on a Pi 5 with the overlay from 1.3, `/dev/ttyAMA0` (untested) |
 | Instance name | Lowercase letters, digits, hyphens — e.g. `living-room`. It becomes the service name `blaueis-gateway@living-room`. |
 | Pre-shared key (PSK) | Accept the generated 44-character key, or type your own (12 characters minimum). |
 | WebSocket port | `8765` unless something else uses it. |
@@ -239,7 +243,7 @@ In HA: update **Blaueis Midea AC** in HACS, then restart. **Failed to connect** 
 |---|---|---|
 | One-liner fails: `git: command not found` | git not installed | `sudo apt install git`, run it again |
 | Installer refuses: Python too old | Raspberry Pi OS Bullseye | Reinstall Bookworm or newer, redo stage 1 |
-| Wizard does not list `/dev/serial0` | Serial hardware not enabled, or no reboot since | Redo 1.2–1.4; on a Pi 5 pick `/dev/ttyAMA0` after adding the overlay |
+| Wizard does not list `/dev/serial0` | Serial hardware not enabled, or no reboot since | Redo 1.2–1.4; on a Pi 5 pick `/dev/ttyAMA0` after adding the overlay (untested) |
 | Log repeats `DISCOVER: no response` | Data pair swapped, AC unpowered, shifter reference or GND missing, wrong port | 3.2, in that order |
 | Instance not running | UART not exclusive, or port 8765 in use | `blaueis-gw logs <name>`; redo stage 1, or change the port (3.2) |
 | **Failed to connect** in HA | Wrong host/port; gateway not running; sides on different releases | `blaueis-gw status`; use the IP; stage 6 |
