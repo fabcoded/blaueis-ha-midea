@@ -138,7 +138,7 @@ def validate_or_raise(
 
     Booleans are not range-checked (handled inside the validator).
     """
-    # Lazy import: _ux_mixin pulls the vendored gate evaluator; importing it at
+    # Lazy import: _ux_mixin pulls the gate evaluator; importing it at
     # module level here loads that chain too early during test collection and trips
     # the select.py / stdlib-select shadow. At call time everything is loaded.
     from ._ux_mixin import field_gate_verdict

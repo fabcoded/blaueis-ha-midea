@@ -115,7 +115,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) — covers setup, test expectations, the 
 
 ## Related projects in this ecosystem
 
-- [blaueis-libmidea](https://github.com/fabcoded/blaueis-libmidea) — the Python library this integration consumes (vendored under `custom_components/blaueis_midea/lib/`).
+- [blaueis-libmidea](https://github.com/fabcoded/blaueis-libmidea) — the Python library this integration consumes (installed from PyPI as `blaueis-core` and `blaueis-client`).
 - [blaueis-esphome](https://github.com/fabcoded/blaueis-esphome) — ESP32 port of the gateway (placeholder).
 - [blaueis-hvacshark](https://github.com/fabcoded/blaueis-hvacshark) — Wireshark Lua dissector, live-capture dongle, protocol specs.
 - [blaueis-hvacshark-traces](https://github.com/fabcoded/blaueis-hvacshark-traces) — capture sessions used to derive the protocol.

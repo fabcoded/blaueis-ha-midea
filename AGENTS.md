@@ -1,6 +1,6 @@
 # AGENTS.md — blaueis-ha-midea
 
-Home Assistant custom integration for Midea ACs via a Blaueis gateway. Consumes `blaueis-libmidea`. The library lives under `custom_components/blaueis_midea/lib/blaueis/{core,client}/` as a build artefact mirroring the libmidea source-of-truth — never edit those files directly. Sync is automated and drift-gated by a pre-commit hook (see "Vendored libmidea" below).
+Home Assistant custom integration for Midea ACs via a Blaueis gateway. Consumes `blaueis-libmidea` as the PyPI packages `blaueis-core` and `blaueis-client`, pinned exactly in `manifest.json` (see "Library dependency" below).
 
 ## Linting
 
@@ -8,7 +8,7 @@ Home Assistant custom integration for Midea ACs via a Blaueis gateway. Consumes 
 ruff check && ruff format --check
 ```
 
-Zero warnings expected. Config in `.ruff.toml` (ruff 0.11.x — pinned in the CI lint job and gated by the pre-commit hook); the vendored `lib/` mirror is excluded — it is linted at its source repo.
+Zero warnings expected. Config in `.ruff.toml` (ruff 0.11.x — pinned in the CI lint job and gated by the pre-commit hook).
 
 ## Tests
 
@@ -37,19 +37,13 @@ Tests must stay green.
 
 Entity model, install/configure, diagnostics bundle, follow-me design, SSH + API-token access, and reload-vs-restart rules live in `docs/`.
 
-## Vendored libmidea — single source of truth, drift-gated
+## Library dependency — PyPI, exact pins
 
-`blaueis-libmidea` is the canonical source. `custom_components/blaueis_midea/lib/blaueis/{core,client}/` is a mirrored copy maintained automatically. Three tools under `tools/` enforce the no-drift contract:
+The library is consumed from PyPI, never copied into this repo. `manifest.json` pins `blaueis-core` and `blaueis-client` with exact `==` versions; Home Assistant installs them with the integration. `requirements-dev.txt` repeats the same two pins plus the test dependencies, and CI installs exactly that file, so tests run against the packages a user gets. `tools/check_pins.py` fails CI when the two files disagree. Bump both together, in the commit that adopts a new library release.
 
-- `sync_from_libmidea.py` — copies `../blaueis-libmidea/packages/blaueis-{core,client}/src/blaueis/{core,client}/` into the vendored tree. `--check` mode reports drift without writing. Run after any libmidea change before staging the ha-midea side.
-- `dev_link_libmidea.py` — replaces the vendored dirs with relative symlinks for a tight edit-test loop (changes in libmidea are immediately visible to HA tests / reload). `--unlink` restores flat-file copies and re-syncs. `--status` reports current mode.
-- `pre-commit` (installed into `.git/hooks/` via `tools/install-hooks.sh`) — refuses commits while symlinked, and refuses commits if the vendored tree has drifted from libmidea HEAD. Direct edits to `lib/` cannot land.
+Protocol, glossary and codec changes belong in `blaueis-libmidea`; adopt them here by releasing the library first, then bumping the pins.
 
-**First-time setup after cloning**: `tools/install-hooks.sh`.
-
-**Daily flow**: edit in libmidea → run `tools/sync_from_libmidea.py` in ha-midea → `git commit` (hook validates). Or in dev-link mode: edit libmidea, tests/HA pick it up live; `tools/dev_link_libmidea.py --unlink` before committing.
-
-When libmidea is published (PyPI or GitHub), the long-term plan is to replace the vendored copy with a `requirements:` entry in `manifest.json` and delete `lib/` entirely — the `from blaueis.core import …` imports already in use don't change.
+**Local library edits**: install a libmidea checkout over the pins in your own environment (`pip install -e <libmidea>/packages/blaueis-core -e <libmidea>/packages/blaueis-client`). Never commit a path or a sibling reference. HA only picks up a changed library after `ha core restart`.
 
 ## Code knowledge graph (optional)
 
@@ -78,10 +72,6 @@ a deploy target, a CI runner, a bisect worktree or a throwaway clone, where
 minutes of disk churn is exactly what nobody wants. **Do not create it to get
 past the gate** — ask first.
 
-The vendored `custom_components/blaueis_midea/lib/` tree is excluded via
-`.graphifyignore`: it is a mirror of the upstream library, and indexing it here
-would duplicate every upstream symbol. Query the library's own graph for anything
-under `lib/`.
 
 **Query it:**
 

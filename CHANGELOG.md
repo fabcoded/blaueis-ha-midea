@@ -5,6 +5,11 @@ Notable changes to the Blaueis Midea integration.
 ## [Unreleased]
 
 ### Changed
+- **The library comes from PyPI.** The integration no longer ships a
+  copy of `blaueis-core` and `blaueis-client`; Home Assistant installs
+  them from PyPI with exact version pins in `manifest.json`. Nothing
+  changes in the UI; the first start after the update downloads the
+  two packages.
 - **Unique ids are keyed on the config entry, not the gateway address.**
   Every entity `unique_id` is now `{entry_id}_{suffix}` and the two
   devices are `{entry_id}_ac` / `{entry_id}_gw`, so a changed host or
@@ -12,7 +17,7 @@ Notable changes to the Blaueis Midea integration.
   Existing installs migrate in place on the first setup after the update:
   entity ids, names, settings, history and both devices are kept, and
   nothing changes in the UI. See `docs/integration.md` §4.5.
-- **BREAKING: session protocol v2.** The vendored library now speaks
+- **BREAKING: session protocol v2.** The library now speaks
   protocol v2 (direction-separated encryption keys and nonces, scrypt
   PSK stretching, key confirmation during connect, gateway pre-auth
   connection cap). A v2 integration cannot talk to a v1 gateway —
@@ -55,7 +60,7 @@ Notable changes to the Blaueis Midea integration.
 - **No false "connected" after the gateway restarts.** A gateway restart
   could leave the integration showing "connected" for a link that had
   already dropped, and a reconnect could send one plaintext message
-  before the key was confirmed. The vendored library now reports
+  before the key was confirmed. The library now reports
   connected only for a link that is still up, sends nothing until the
   key is confirmed, and the gateway closes a connection that sends bad
   input cleanly instead of leaving it half-open.
