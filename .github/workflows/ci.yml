@@ -15,9 +15,7 @@ jobs:
           python-version: "3.12"
       # Runs exactly the gates contributors get locally, from the same config.
       # The ruff pin now lives in .pre-commit-config.yaml alone — there is no
-      # second version to keep in sync. The vendored-mirror gates skip here
-      # (no sibling libmidea checkout on a runner), as they do for any
-      # contributor working outside the development workspace.
+      # second version to keep in sync.
       - name: Install pre-commit
         run: pip install pre-commit
       - name: Run hooks
@@ -31,16 +29,16 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install deps
-        # pytest-homeassistant-custom-component pulls a real Home Assistant, which
-        # the unit tests need for the platform modules the conftest does not stub
-        # (number / sensor / binary_sensor / button). jsonschema / websockets /
-        # pyyaml / cryptography mirror manifest.json requirements — HA core does
-        # not guarantee them (websockets broke collection when __init__ gained
-        # its import).
+        # requirements-dev.txt carries the exact blaueis-core / blaueis-client
+        # pins from manifest.json, so CI runs against the same PyPI packages
+        # HA installs. pytest-homeassistant-custom-component pulls a real Home
+        # Assistant, which the unit tests need for the platform modules the
+        # conftest does not stub (number / sensor / binary_sensor / button).
         run: |
           python -m pip install --upgrade pip
-          pip install pytest-homeassistant-custom-component jsonschema \
-                      websockets pyyaml cryptography
+          pip install -r requirements-dev.txt
+      - name: Pins match manifest.json
+        run: python tools/check_pins.py
       - name: Run unit tests
         # The fast half: mocked HA, no event loop. The -m filter keeps this
         # step to the unit suite even if an integration-marked test is ever

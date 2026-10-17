@@ -26,7 +26,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
-from pathlib import Path
+from importlib import resources
 from typing import Any
 
 import yaml
@@ -37,8 +37,8 @@ from jsonschema.exceptions import ValidationError
 
 _LOGGER = logging.getLogger(__name__)
 
-# Path to the schema, vendored alongside the glossary.
-_SCHEMA_PATH = Path(__file__).parent / "lib" / "blaueis" / "core" / "data" / "glossary_schema.json"
+# The schema ships as package data of blaueis-core, next to the glossary.
+_SCHEMA_RESOURCE = resources.files("blaueis.core") / "data" / "glossary_schema.json"
 
 
 class GlossaryOverrideError(ValueError):
@@ -59,7 +59,7 @@ class GlossaryOverrideError(ValueError):
 # The schema file is bundled with the integration and never mutates, so
 # there's no benefit to deferring.
 
-_SCHEMA: dict = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+_SCHEMA: dict = json.loads(_SCHEMA_RESOURCE.read_text(encoding="utf-8"))
 
 
 # ── Public API ─────────────────────────────────────────────────────────

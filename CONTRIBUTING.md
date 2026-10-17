@@ -6,7 +6,7 @@ Contributions are welcome. This project is MIT-licensed — by submitting a chan
 
 - For anything non-trivial, **open an issue first** describing the change and your plan. Small fixes and typo corrections can go straight to PR.
 - Read [`AGENTS.md`](AGENTS.md) — it describes the integration's conventions, test expectations, and reload-vs-restart rules.
-- The Python library this integration consumes is vendored under `custom_components/blaueis_midea/lib/`. Protocol or glossary changes belong upstream in [blaueis-libmidea](https://github.com/fabcoded/blaueis-libmidea), not here — submit those there and then bump the vendored snapshot.
+- The Python library this integration consumes is installed from PyPI (`blaueis-core`, `blaueis-client`, exact pins in `manifest.json`). Protocol or glossary changes belong upstream in [blaueis-libmidea](https://github.com/fabcoded/blaueis-libmidea), not here — submit those there; the integration adopts them by bumping the pins once the library is released.
 
 ## Citation rule — the one that matters
 
@@ -15,7 +15,7 @@ This integration builds on community research (see [README.md#acknowledgments](R
 - Reference file paths, function names, or line numbers from external implementations in code, comments, or documentation.
 - Copy content from external source code — comments, variable names, logic blocks.
 
-Structured-provenance fields (`alt_names:` / `sources:` in the vendored `glossary.yaml`) are the one exception. See the glossary's file-header comments and the workspace-level `AGENTS.md` for the rule.
+Structured-provenance fields (`alt_names:` / `sources:` in the library's `glossary.yaml`) are the one exception. See the glossary's file-header comments and the workspace-level `AGENTS.md` for the rule.
 
 ## Development setup
 
@@ -28,7 +28,7 @@ pip install pre-commit   # if you don't already have it
 ./tools/install-hooks.sh
 ```
 
-Two of the hooks guard the vendored `lib/` mirror and are only meaningful inside the development workspace. Without a sibling `blaueis-libmidea` checkout they skip with a warning rather than blocking your commit.
+Install the test dependencies with `pip install -r requirements-dev.txt`. It carries the same library pins as `manifest.json`; to try an unreleased library change, install a local `blaueis-libmidea` checkout over them in your own environment (`pip install -e <libmidea>/packages/blaueis-core -e <libmidea>/packages/blaueis-client`) and do not commit it.
 
 For test-suite and lint work:
 

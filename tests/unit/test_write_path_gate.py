@@ -15,8 +15,6 @@ import pytest
 from blaueis.core.codec import load_glossary, walk_fields
 from homeassistant.exceptions import ServiceValidationError
 
-# Import the integration package first (its __init__ front-loads the vendored
-# `blaueis` lib path) before importing blaueis directly.
 from custom_components.blaueis_midea._preflight import validate_or_raise
 from custom_components.blaueis_midea._ux_mixin import field_ux_available
 

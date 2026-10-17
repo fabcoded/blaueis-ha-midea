@@ -5,11 +5,8 @@
 # the pre-commit framework (https://pre-commit.com). Two hook types are
 # installed:
 #
-#   pre-commit  — lint, formatting, and the vendored-mirror gates
+#   pre-commit  — lint and formatting
 #   commit-msg  — message-level checks
-#
-# Both are safe outside the development workspace: the vendored-mirror gates
-# skip with a warning when there is no sibling blaueis-libmidea checkout.
 
 set -euo pipefail
 

@@ -367,7 +367,7 @@ Two flavours, pick by what you changed.
 | HA **UI config** (host / port / PSK) | Settings → ⋮ → Reload | ~1 s, only this integration |
 | Glossary overrides (Configure dialog YAML) | Reload config entry | ~1 s |
 | Any `.py` file in `custom_components/blaueis_midea/**` | `ha core restart` | 30–60 s, whole HA |
-| Any `.py` in vendored `lib/blaueis/**` | `ha core restart` | Same |
+| Library version (`requirements` in `manifest.json`) | `ha core restart` | Same |
 | Bundled `glossary.yaml` (libmidea data) | `ha core restart` | Same |
 | New platform added (e.g. adding `number.py`) | `ha core restart` | Same |
 

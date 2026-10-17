@@ -20,9 +20,6 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-_VENDORED_LIB = _REPO_ROOT / "custom_components" / "blaueis_midea" / "lib"
-if str(_VENDORED_LIB) not in sys.path:
-    sys.path.insert(0, str(_VENDORED_LIB))
 
 from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 
@@ -250,7 +247,7 @@ async def test_setup_entry_auth_failed_starts_reauth(hass: HomeAssistant, mock_c
     """An AuthenticationError during setup puts the entry in SETUP_ERROR
     (no retry backoff — retrying a wrong key is pointless) and HA
     auto-creates a reauth flow. Also pins the class-identity contract:
-    the AuthenticationError the vendored lib raises must be the same
+    the AuthenticationError the library raises must be the same
     object __init__.py catches."""
     from blaueis.core.crypto import AuthenticationError
 
@@ -282,7 +279,7 @@ async def test_runtime_auth_failure_starts_reauth(hass: HomeAssistant, mock_conf
         await hass.async_block_till_done()
 
         coordinator = mock_config_entry.runtime_data
-        # Simulate the vendored reconnect loop hitting a confirmed
+        # Simulate the library reconnect loop hitting a confirmed
         # mismatch (it calls this coordinator method via
         # Device.on_auth_failed).
         coordinator._on_auth_failed("PSK mismatch")

@@ -1,8 +1,3 @@
-# The vendored libmidea mirror is a build artefact, not source. It is linted
-# and validated at its own repo; excluding it here also stops the whitespace
-# and end-of-file fixers from rewriting it into drift against that source.
-exclude: ^custom_components/blaueis_midea/lib/
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -19,27 +14,6 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
-
-  # Repo-specific gates for the vendored mirror. Both invoke bash explicitly
-  # rather than relying on the file's executable bit, so a clone that lost the
-  # mode still runs them.
-  - repo: local
-    hooks:
-      - id: no-dev-symlink
-        name: vendored lib/ is not a dev symlink
-        entry: bash tools/hooks/no_dev_symlink.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-
-      - id: vendored-drift
-        name: vendored lib/ matches libmidea
-        entry: bash tools/hooks/vendored_drift.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
 
   # Optional local checks supplied by a surrounding workspace. A silent no-op in
   # a plain clone. `verbose: true` is deliberate: pre-commit suppresses the output

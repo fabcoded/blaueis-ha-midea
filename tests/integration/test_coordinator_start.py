@@ -19,9 +19,6 @@ from unittest.mock import AsyncMock, patch
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-_VENDORED_LIB = _REPO_ROOT / "custom_components" / "blaueis_midea" / "lib"
-if str(_VENDORED_LIB) not in sys.path:
-    sys.path.insert(0, str(_VENDORED_LIB))
 
 import pytest  # noqa: E402
 from homeassistant.core import HomeAssistant  # noqa: E402

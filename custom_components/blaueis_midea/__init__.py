@@ -9,32 +9,25 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import sys
 from datetime import timedelta
-from pathlib import Path
 
-# Make vendored blaueis library importable
-_LIB = str(Path(__file__).parent / "lib")
-if _LIB not in sys.path:
-    sys.path.insert(0, _LIB)
-
-from homeassistant.config_entries import ConfigEntry  # noqa: E402
-from homeassistant.const import CONF_HOST, CONF_PORT, Platform  # noqa: E402
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback  # noqa: E402
-from homeassistant.exceptions import (  # noqa: E402
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST, CONF_PORT, Platform
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
     ConfigEntryNotReady,
 )
-from homeassistant.helpers import issue_registry as ir  # noqa: E402
-from homeassistant.helpers.event import async_call_later  # noqa: E402
-from homeassistant.util import dt as dt_util  # noqa: E402
-from websockets.exceptions import WebSocketException  # noqa: E402
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.event import async_call_later
+from homeassistant.util import dt as dt_util
+from websockets.exceptions import WebSocketException
 
-from ._glossary_override import (  # noqa: E402
+from ._glossary_override import (
     GlossaryOverrideError,
     validate_and_parse_overrides,
 )
-from .const import (  # noqa: E402
+from .const import (
     CLIMATE_EXCLUSIVE_FIELDS,
     CONF_DISPLAY_BUZZER_MODE,
     CONF_FMF_CONFIGURED,
@@ -47,10 +40,10 @@ from .const import (  # noqa: E402
     DISPLAY_BUZZER_POLICIES,
     SYNTHETIC_ENTITY_CAP_DEPENDENCIES,
 )
-from .const import (  # noqa: E402
+from .const import (
     DOMAIN as DOMAIN,
 )
-from .coordinator import BlaueisMideaCoordinator  # noqa: E402
+from .coordinator import BlaueisMideaCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -375,7 +368,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry
         _uninstall_debug_ring(entry)
 
         # Drop the libmidea module-level glossary cache so a config-entry
-        # reload picks up changes to the vendored glossary.yaml without
+        # reload picks up changes to the glossary.yaml without
         # requiring a full HA restart. Cheap (the next setup re-reads the
         # YAML once); without this, a developer pushing a glossary update
         # via the integration update flow sees stale state until restart.

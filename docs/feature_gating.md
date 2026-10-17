@@ -2,7 +2,7 @@
 
 > How the library's offer gate surfaces in Home Assistant: which entities/presets
 > appear depends on the current device state (capability, mode, interlocks, power).
-> The gating **model** lives in the vendored library —
+> The gating **model** lives in the library —
 > `blaueis-libmidea/docs/feature_gating.md`. This doc covers only the HA-side wiring.
 
 ---
@@ -62,12 +62,12 @@ mask to zero stale bits on outgoing frames. It does **not** consult the gate eva
 the offer gate is advisory (UI availability) and must never change wire behaviour. Keep
 these two concerns separate.
 
-## 5. Vendored boundary
+## 5. Library boundary
 
 `gate_eval`, `gate_anchors`, the gate schema, and capability ingestion all live in the
-vendored library under `custom_components/blaueis_midea/lib/blaueis/`. Edit them in the
-`blaueis-libmidea` source and re-vendor with `tools/sync_from_libmidea.py`; direct edits
-to the vendored tree are overwritten. Only the two offering sites and the
+library (`blaueis-core`, installed from PyPI). Change them in the
+`blaueis-libmidea` source and adopt the release by bumping the pins in `manifest.json`
+and `requirements-dev.txt`. Only the two offering sites and the
 `interlock_states` helper are integration-side code.
 
 ---
