@@ -4,6 +4,12 @@ Notable changes to the Blaueis Midea integration.
 
 ## [Unreleased]
 
+### Added
+- **Leftover devices can be deleted.** A device of this integration that
+  is not one of the two the entry currently uses (the air conditioner and
+  the gateway) can now be removed from its device page, for example the
+  duplicates an address change left behind on pre-release installs.
+
 ## [0.1.0rc1] - 2026-10-18
 
 ### Changed

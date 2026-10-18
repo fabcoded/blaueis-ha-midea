@@ -361,6 +361,18 @@ async def _async_options_updated(hass: HomeAssistant, entry: BlaueisMideaConfigE
         return
 
 
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: BlaueisMideaConfigEntry,
+    device_entry,
+) -> bool:
+    """Allow deleting a device of this entry unless it is one of the two the
+    entry currently runs (``{entry_id}_ac`` / ``{entry_id}_gw``). Leftovers
+    from older id schemes can then be removed from the device page."""
+    current = {(DOMAIN, f"{entry.entry_id}_ac"), (DOMAIN, f"{entry.entry_id}_gw")}
+    return not (device_entry.identifiers & current)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: BlaueisMideaConfigEntry) -> bool:
     """Unload a config entry."""
     coordinator: BlaueisMideaCoordinator = entry.runtime_data
@@ -503,6 +515,13 @@ def _migrate_to_entry_id_prefix(
     Runs on every setup before the platforms load. Idempotent: a no-op
     once nothing carries the old prefix. The old ``host``/``port`` form is
     matched here and nowhere else.
+
+    Known limit: the old prefix is built from the entry's *current* host and
+    port. An entry whose address changed before this migration first ran
+    keeps its old ids orphaned and gets a fresh set; only pre-0.1.0 installs
+    can be in that state (no release shipped address-based ids), and their
+    leftover devices can be deleted from the UI
+    (``async_remove_config_entry_device``).
     """
     from homeassistant.helpers import device_registry as dr
     from homeassistant.helpers import entity_registry as er

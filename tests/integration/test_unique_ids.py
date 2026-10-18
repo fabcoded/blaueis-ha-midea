@@ -289,3 +289,18 @@ async def test_a_stored_ac_sw_version_is_cleared(hass: HomeAssistant, mock_confi
 
     assert _device(hass, mock_config_entry, "ac").sw_version is None
     assert _device(hass, mock_config_entry, "gw").sw_version is not None
+
+
+async def test_only_leftover_devices_can_be_deleted(hass: HomeAssistant, mock_config_entry) -> None:
+    await _setup(hass, mock_config_entry)
+    dev_reg = dr.async_get(hass)
+    leftover = dev_reg.async_get_or_create(
+        config_entry_id=mock_config_entry.entry_id,
+        identifiers={(DOMAIN, "192.0.2.1:8765_ac")},
+        name="Old address AC",
+    )
+
+    for kind in ("ac", "gw"):
+        current = dev_reg.async_get_device(identifiers={(DOMAIN, _new(mock_config_entry, kind))})
+        assert not await integration.async_remove_config_entry_device(hass, mock_config_entry, current)
+    assert await integration.async_remove_config_entry_device(hass, mock_config_entry, leftover)
