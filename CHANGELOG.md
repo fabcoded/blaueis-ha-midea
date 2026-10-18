@@ -4,6 +4,8 @@ Notable changes to the Blaueis Midea integration.
 
 ## [Unreleased]
 
+## [0.1.0rc2] - 2026-10-18
+
 ### Added
 - **Leftover devices can be deleted.** A device of this integration that
   is not one of the two the entry currently uses (the air conditioner and
