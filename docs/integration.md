@@ -166,9 +166,9 @@ Python dependencies pulled by the manifest: `websockets>=12.0`, `pyyaml>=6.0`, `
 
 ## 2. Install
 
-### 2.1 HACS (custom repository, from the 0.1.0 release)
+### 2.1 Marketplace or HACS (custom repository)
 
-Add the repository as a custom HACS source, install **Blaueis Midea AC**, restart HA.
+Home Assistant 2026.11 and newer: Settings → Marketplace → **Add from link** → `fabcoded/blaueis-ha-midea`. Older versions: add the repository as a custom HACS source. Install **Blaueis Midea AC** and restart Home Assistant; [QUICKSTART](../QUICKSTART.md#4-install-the-integration-in-home-assistant) has the steps, including how to opt in to release candidates.
 
 ### 2.2 Manual
 

@@ -13,7 +13,7 @@ New to Blaueis Midea? The [**QUICKSTART**](https://github.com/fabcoded/blaueis-h
 
 - **Wire** the AC's dongle port to a Raspberry Pi through a level shifter.
 - **Install the gateway** on the Pi with the one-line installer and setup wizard.
-- **Add the integration** in Home Assistant through HACS.
+- **Add the integration** in Home Assistant through the Marketplace (HACS before Home Assistant 2026.11).
 - **Connect** — enter the Pi's address and PSK, and the AC becomes a climate entity.
 
 ## What you get
@@ -73,11 +73,10 @@ by default to keep the UI clean.
 
 ## Install
 
-1. **HACS → ⋮ → Custom repositories.** Add `https://github.com/fabcoded/blaueis-ha-midea`, type **Integration**.
-2. Search **Blaueis Midea AC** and download it.
-3. **Restart Home Assistant.**
+- **Home Assistant 2026.11 or newer:** Settings → Marketplace → **Add from link** → `fabcoded/blaueis-ha-midea`, install **Blaueis Midea AC**, restart Home Assistant.
+- **Before 2026.11:** HACS → ⋮ → **Custom repositories** → `https://github.com/fabcoded/blaueis-ha-midea`, type **Integration**; download **Blaueis Midea AC**, restart Home Assistant.
 
-`hacs.json` and the HACS validation ship with the 0.1.0 release; until it is out, use the manual installation below.
+Until the first regular release only release candidates exist, which both stores hide by default; [QUICKSTART](QUICKSTART.md#4-install-the-integration-in-home-assistant) shows how to opt in.
 
 Then **Settings → Devices & Services → Add Integration → Blaueis Midea AC**,
 enter host / port / PSK.

@@ -7,7 +7,7 @@ From a Raspberry Pi, a Midea air conditioner and a Home Assistant install to a w
 | 1. Prepare the Pi | Pi | Bookworm, the UART freed for the gateway |
 | 2. Wire | AC + Pi | The Pi's UART connected to the AC's dongle port through a level shifter |
 | 3. Gateway | Pi | `blaueis-gateway@<name>` running, the AC answering, a pre-shared key (PSK) in hand |
-| 4. Integration | Home Assistant | **Blaueis Midea AC** installed through HACS |
+| 4. Integration | Home Assistant | **Blaueis Midea AC** installed through the Marketplace (HACS before Home Assistant 2026.11) |
 | 5. Connect | Home Assistant | Two devices: your AC and the gateway |
 
 Two components, released together under the same version number (0.1.0 for both): the gateway daemon ([blaueis-libmidea](https://github.com/fabcoded/blaueis-libmidea)) and the integration ([blaueis-ha-midea](https://github.com/fabcoded/blaueis-ha-midea)). During 0.x you update them together (stage 6).
@@ -25,7 +25,7 @@ Home Assistant  <-- WebSocket, port 8765 -->  Raspberry Pi gateway  <-- UART 960
 - **A bidirectional 5 V ↔ 3.3 V level shifter.** Mandatory: the Pi's UART pins are 3.3 V and are damaged by 5 V, and the AC ignores 3.3 V drive. A common bidirectional module of the BSS138 type with two or more channels should work; no specific part is verified yet.
 - **A multimeter** (DC volts) for the one check in 2.1.
 - **Wires and a plug that fits your AC's dongle socket** (2.1 describes the socket; the exact part depends on your unit).
-- **Home Assistant 2024.10 or newer** with **HACS** installed, and a network path from Home Assistant to the Pi on TCP port 8765.
+- **Home Assistant 2024.12 or newer.** From 2026.11 the built-in Marketplace installs the integration; before that you need **HACS**. Home Assistant must reach the Pi on TCP port 8765.
 
 ## 1. Prepare the Pi
 
@@ -192,11 +192,21 @@ If the instance is not running at all, `blaueis-gw logs <name>` shows why: a ser
 
 ## 4. Install the integration in Home Assistant
 
+Home Assistant 2026.11 and newer has the **Marketplace** built in; older versions use **HACS**. Follow the block for your version.
+
+**Home Assistant 2026.11 or newer — Marketplace**
+
+1. **Settings → Marketplace → Add from link** (upper right). GitHub link: `fabcoded/blaueis-ha-midea`; pick type **Integration** if asked. The first time, the Marketplace asks you to connect a GitHub account (a device sign-in; it does not ask for access to private repositories).
+2. Open **Blaueis Midea AC** and install it.
+3. **Restart Home Assistant.**
+
+**Home Assistant before 2026.11 — HACS**
+
 1. **HACS → ⋮ → Custom repositories.** Add `https://github.com/fabcoded/blaueis-ha-midea`, type **Integration**.
 2. Search **Blaueis Midea AC** and download it.
 3. **Restart Home Assistant.**
 
-`hacs.json` and the HACS validation ship with the 0.1.0 release; until it is out, install manually instead ([docs/integration.md](docs/integration.md#22-manual)).
+**Release candidates.** Until the first regular release, only pre-releases (tags like `v0.1.0rc2`) exist, and both stores hide them by default. Marketplace: Settings → Devices & services → Marketplace → the **Blaueis Midea AC** device → enable the disabled **Pre-release** entity and turn the switch on. HACS: pick the pre-release in the version selection of the download dialog.
 
 **Checkpoint.** Settings → Devices & Services → Add Integration → search `Blaueis` shows **Blaueis Midea AC**. If it is missing, the download did not complete or HA has not restarted yet.
 
@@ -235,7 +245,7 @@ sudo blaueis-gw update --apply     # installs it
 sudo blaueis-gw update --rollback  # returns to the previous install if the new one misbehaves
 ```
 
-In HA: update **Blaueis Midea AC** in HACS, then restart. **Failed to connect** right after an update usually means only one side was updated.
+In HA: update **Blaueis Midea AC** in the Marketplace (HACS before 2026.11), then restart. **Failed to connect** right after an update usually means only one side was updated.
 
 ## When it does not work
 
@@ -264,7 +274,7 @@ Do not paste the PSK.
 
 ## Uninstall
 
-On the Pi: `sudo blaueis-gw uninstall`. In HA: Settings → Devices & Services → Blaueis Midea → ⋮ → Delete, then remove the integration in HACS.
+On the Pi: `sudo blaueis-gw uninstall`. In HA: Settings → Devices & Services → Blaueis Midea → ⋮ → Delete, then remove it in the Marketplace (HACS before 2026.11).
 
 ## Next
 
