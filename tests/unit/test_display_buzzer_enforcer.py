@@ -17,6 +17,7 @@ Covers the scenarios from the plan's §9.1:
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Optional
 
 import pytest
@@ -99,6 +100,7 @@ class Probe:
         self.poll_calls = 0
         self.toggle_delay = 0.0  # simulated await in send_toggle
         self.toggle_exception: Optional[Exception] = None
+        self.poll_exception: Optional[Exception] = None
 
     def get_mode(self) -> str:
         return self.mode
@@ -115,6 +117,8 @@ class Probe:
 
     async def send_silent_poll(self) -> None:
         self.poll_calls += 1
+        if self.poll_exception is not None:
+            raise self.poll_exception
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -393,6 +397,45 @@ async def test_safety_timer_fires_silent_poll_on_quiet_bus():
     sched.fire_due()
     await _drain_tasks()
     assert probe.poll_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_failing_silent_poll_warns_once_then_stays_quiet_until_recovery(caplog):
+    probe = Probe(mode=MODE_FORCED_OFF, observed=DISPLAY_STATE_OFF)
+    probe.poll_exception = OSError("gateway unreachable")
+    clock = FakeClock(0.0)
+    sched = FakeScheduler(clock)
+    e = _make_enforcer(probe, clock, sched)
+    await e.on_ingress()
+    await _drain_tasks()
+
+    with caplog.at_level(logging.DEBUG):
+        for _ in range(3):
+            clock.advance(61.0)
+            sched.fire_due()
+            await _drain_tasks()
+    assert probe.poll_calls == 3
+    failures = [r for r in caplog.records if "send_silent_poll" in r.getMessage()]
+    assert [r.levelno for r in failures] == [logging.WARNING, logging.DEBUG, logging.DEBUG]
+    assert all(r.exc_info is None for r in failures)
+
+    caplog.clear()
+    probe.poll_exception = None
+    with caplog.at_level(logging.DEBUG):
+        clock.advance(61.0)
+        sched.fire_due()
+        await _drain_tasks()
+    recovered = [r for r in caplog.records if "send_silent_poll" in r.getMessage()]
+    assert [r.levelno for r in recovered] == [logging.INFO]
+
+    # A new failure after recovery warns again.
+    caplog.clear()
+    probe.poll_exception = OSError("down again")
+    with caplog.at_level(logging.DEBUG):
+        clock.advance(61.0)
+        sched.fire_due()
+        await _drain_tasks()
+    assert [r.levelno for r in caplog.records if "send_silent_poll" in r.getMessage()] == [logging.WARNING]
 
 
 @pytest.mark.asyncio

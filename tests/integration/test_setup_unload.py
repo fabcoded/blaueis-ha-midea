@@ -201,6 +201,32 @@ async def test_cancelled_setup_detaches_the_debug_ring_once(hass: HomeAssistant,
         assert _ring_handlers(name) == []
 
 
+async def test_unexpected_error_in_connect_stops_the_device_once(hass: HomeAssistant, mock_config_entry) -> None:
+    """An error outside the handled tuple must not leave the Device reconnecting."""
+    mock_config_entry.add_to_hass(hass)
+    device_stop = AsyncMock()
+    with patch(_START, AsyncMock(side_effect=RuntimeError("boom"))), patch(_DEVICE_STOP, device_stop):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+    device_stop.assert_awaited_once()
+
+
+async def test_cancelled_connect_stops_the_device_once(hass: HomeAssistant, mock_config_entry) -> None:
+    """A setup timeout cancels the connect; the cancellation propagates and the Device is stopped."""
+    mock_config_entry.add_to_hass(hass)
+    device_stop = AsyncMock()
+    with (
+        patch(_START, AsyncMock(side_effect=asyncio.CancelledError())),
+        patch(_DEVICE_STOP, device_stop),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await integration.async_setup_entry(hass, mock_config_entry)
+
+    device_stop.assert_awaited_once()
+
+
 async def test_setup_autostarts_follow_me_when_configured_and_enabled(hass: HomeAssistant, mock_config_entry) -> None:
     fm_start = AsyncMock()
     with patch(_FM_START, fm_start):
