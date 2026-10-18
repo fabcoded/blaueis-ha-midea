@@ -24,21 +24,16 @@ load.
 from __future__ import annotations
 
 import copy
-import json
 import logging
-from importlib import resources
 from typing import Any
 
 import yaml
-from blaueis.core.codec import load_glossary
+from blaueis.core.codec import load_glossary, load_glossary_schema
 from blaueis.core.glossary_override import OverrideMessage, apply_override
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
 _LOGGER = logging.getLogger(__name__)
-
-# The schema ships as package data of blaueis-core, next to the glossary.
-_SCHEMA_RESOURCE = resources.files("blaueis.core") / "data" / "glossary_schema.json"
 
 
 class GlossaryOverrideError(ValueError):
@@ -56,10 +51,10 @@ class GlossaryOverrideError(ValueError):
 # Loaded eagerly so the I/O happens during HA's executor-threaded import
 # of the integration package — never inside the event loop. A lazy load
 # triggered HA's blocking-call detector at async_setup_entry time.
-# The schema file is bundled with the integration and never mutates, so
-# there's no benefit to deferring.
+# The schema ships with blaueis-core and never mutates, so there's no
+# benefit to deferring.
 
-_SCHEMA: dict = json.loads(_SCHEMA_RESOURCE.read_text(encoding="utf-8"))
+_SCHEMA: dict = load_glossary_schema()
 
 
 # ── Public API ─────────────────────────────────────────────────────────

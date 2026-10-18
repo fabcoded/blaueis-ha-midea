@@ -8,8 +8,8 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/fabcoded/blaueis-ha-midea/issues",
   "requirements": [
-    "blaueis-core==0.1.0rc1",
-    "blaueis-client==0.1.0rc1"
+    "blaueis-core==0.1.0rc2",
+    "blaueis-client==0.1.0rc2"
   ],
   "version": "0.1.0"
 }

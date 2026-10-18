@@ -45,11 +45,10 @@ import logging
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
-from blaueis.core.codec import walk_fields
+from blaueis.core.codec import load_glossary_schema, walk_fields
 from blaueis.core.inventory import (
     CLASS_POPULATED,
     ShadowDecoder,
-    _load_glossary_schema,
     generate_compare_report,
     generate_json_sidecar,
     generate_markdown_report,
@@ -139,7 +138,7 @@ async def async_setup_field_inventory(hass: HomeAssistant, entry: "BlaueisMideaC
     # Warm the glossary-schema cache off-loop — the synthesizer's first
     # call opens glossary_schema.json synchronously, and HA's event-loop
     # watchdog flags that as blocking I/O. Once is enough.
-    await hass.async_add_executor_job(_load_glossary_schema)
+    await hass.async_add_executor_job(load_glossary_schema)
 
     store = _store_for_entry(hass, entry)
     coordinator.inventory_store = store  # type: ignore[attr-defined]

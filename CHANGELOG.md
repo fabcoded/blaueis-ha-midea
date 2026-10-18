@@ -5,6 +5,13 @@ Notable changes to the Blaueis Midea integration.
 ## [Unreleased]
 
 ### Changed
+- **Switches the unit does not act on are hidden.** Tested on the
+  development unit: `temperature_unit` and `cleanup` work and stay.
+  `resume`, `energy_save`, `power_save`, `catch_cold`,
+  `low_frequency_fan` and `dry_clean` were accepted but never took
+  effect, and `self_clean` could be switched on but not off; these
+  seven no longer appear. Existing installs lose the entities on the
+  first start after the update.
 - **The library comes from PyPI.** The integration no longer ships a
   copy of `blaueis-core` and `blaueis-client`; Home Assistant installs
   them from PyPI with exact version pins in `manifest.json`. Nothing
