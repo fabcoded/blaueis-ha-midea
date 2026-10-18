@@ -177,6 +177,9 @@ class DisplayBuzzerEnforcer:
         # misbehaving firmware that keeps toggling the cap doesn't flood
         # the logs. Reset when the cap returns.
         self._cap_loss_logged = False
+        # Same latch for a failing silent poll: one WARNING when it starts
+        # failing, DEBUG while the outage lasts, one INFO when it recovers.
+        self._poll_failing = False
 
     # ── Public surface ────────────────────────────────────────────────
 
@@ -388,8 +391,16 @@ class DisplayBuzzerEnforcer:
             return
         try:
             await self._send_silent_poll()
-        except Exception:
-            self._log.exception("send_silent_poll failed")
+        except Exception as err:
+            if self._poll_failing:
+                self._log.debug("send_silent_poll still failing: %r", err)
+            else:
+                self._poll_failing = True
+                self._log.warning("send_silent_poll failed (%r); retrying quietly until it succeeds", err)
+        else:
+            if self._poll_failing:
+                self._poll_failing = False
+                self._log.info("send_silent_poll succeeds again")
         # Re-arm the safety timer even if the poll failed — next firing
         # will try again. A successful poll should produce an ingress
         # which will re-arm via _reset_safety_timer().

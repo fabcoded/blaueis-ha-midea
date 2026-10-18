@@ -228,6 +228,13 @@ async def _async_setup_connected(
             await coordinator.device.stop()
         _note_gateway_unreachable(hass, entry, host, port)
         raise ConfigEntryNotReady(f"Cannot reach Blaueis gateway at {host}:{port}: {err}") from err
+    except BaseException:
+        # Anything else — an unexpected error, or a cancellation when HA times
+        # the setup out — would leave the Device's reconnect loop running for
+        # an entry that never loaded, because HA runs no unload for it.
+        with contextlib.suppress(Exception):
+            await coordinator.device.stop()
+        raise
 
     # Past this point the Device is running and its hooks get wired. HA does
     # not run async_on_unload callbacks when setup fails, so a failure here
