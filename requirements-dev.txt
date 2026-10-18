@@ -5,6 +5,6 @@
 # To work against a local blaueis-libmidea checkout instead, install it over
 # the pins in your own environment (never commit a path here):
 #   pip install -e <libmidea>/packages/blaueis-core -e <libmidea>/packages/blaueis-client
-blaueis-core==0.1.0rc1
-blaueis-client==0.1.0rc1
+blaueis-core==0.1.0rc2
+blaueis-client==0.1.0rc2
 pytest-homeassistant-custom-component
