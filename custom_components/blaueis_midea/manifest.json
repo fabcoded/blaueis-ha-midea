@@ -11,5 +11,5 @@
     "blaueis-core==0.1.0rc2",
     "blaueis-client==0.1.0rc2"
   ],
-  "version": "0.1.0"
+  "version": "0.1.0rc1"
 }

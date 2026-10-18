@@ -4,6 +4,8 @@ Notable changes to the Blaueis Midea integration.
 
 ## [Unreleased]
 
+## [0.1.0rc1] - 2026-10-18
+
 ### Changed
 - **Switches the unit does not act on are hidden.** Tested on the
   development unit: `temperature_unit` and `cleanup` work and stay.
@@ -33,6 +35,11 @@ Notable changes to the Blaueis Midea integration.
   previously dedicated to the public domain; it is now distributed
   under MIT, which requires keeping the copyright and license notice
   in copies and derivative works.
+- **Swing / vane option lists are computed live** from current capabilities
+  instead of a cached setup-time snapshot, so the dropdown never offers a
+  position the set path would reject.
+- **Fan: off-grid speeds now show a blank tile** instead of a synthetic
+  "Custom" entry; the fan dropdown lists only the named presets.
 
 ### Added
 - **Repairs issue when the gateway stays unreachable.** If the gateway
@@ -49,8 +56,18 @@ Notable changes to the Blaueis Midea integration.
   cryptographically confirmed mismatch triggers this — transient
   handshake failures (gateway connection pool full, version-mismatch
   close) stay ordinary connection errors and keep retrying.
+- Swing / vane-position option labels are now translated (e.g. `upper_middle`
+  → "Upper Middle", `left_center` → "Left Center") instead of rendering raw
+  slugs.
 
 ### Fixed
+- **A setup that fails unexpectedly no longer leaves a reconnect loop
+  running.** Any error while connecting at setup, including a setup that
+  Home Assistant times out, now stops the connection before the error is
+  reported.
+- **A gateway outage no longer floods the log.** The display/buzzer
+  enforcer logs one warning when its status poll starts failing, stays
+  quiet while the gateway is away, and logs one line when it recovers.
 - **The AC device no longer shows the gateway's version.** Its
   `sw_version` carried the gateway's version string; the AC's own
   firmware version is unknown, so the field is now empty (and a stored
@@ -115,15 +132,3 @@ Notable changes to the Blaueis Midea integration.
   can no longer *demote* a field confirmed at boot. Each blocked demotion is
   logged and counted (`frame_counts.cap_demotions_blocked`) so the source stays
   observable.
-
-### Changed
-- **Swing / vane option lists are computed live** from current capabilities
-  instead of a cached setup-time snapshot, so the dropdown never offers a
-  position the set path would reject.
-- **Fan: off-grid speeds now show a blank tile** instead of a synthetic
-  "Custom" entry; the fan dropdown lists only the named presets.
-
-### Added
-- Swing / vane-position option labels are now translated (e.g. `upper_middle`
-  → "Upper Middle", `left_center` → "Left Center") instead of rendering raw
-  slugs.
