@@ -109,6 +109,14 @@ Diagnostics**. The JSON includes both the HA-side and gateway-side
 flight-recorder rings, merged by timestamp. Full frame-level capture
 with provenance tracking — no need to raise log levels.
 
+## Support
+
+This is a hobby project, answered on a best-effort basis, with no promise of response times or releases. It is developed and tested against one unit, a Midea XtremeSaveBlue split air conditioner; other Midea units that speak the same serial protocol are likely to work in part.
+
+- Questions, setup help, and reports of which units work: [Discussions](https://github.com/fabcoded/blaueis-ha-midea/discussions).
+- Bugs and feature requests: [Issues](https://github.com/fabcoded/blaueis-ha-midea/issues/new/choose); the bug form asks for the versions and the diagnostics bundle described under Debugging.
+- Gateway, installer or protocol problems: [blaueis-libmidea issues](https://github.com/fabcoded/blaueis-libmidea/issues).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) — covers setup, test expectations, the citation rule, and HA-specific reminders (reload vs restart, declarative YAML, cap-gated defaults).

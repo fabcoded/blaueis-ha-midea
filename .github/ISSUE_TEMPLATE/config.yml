@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or setup help
+    url: https://github.com/fabcoded/blaueis-ha-midea/discussions/categories/q-a
+    about: Installation, configuration and "does my unit work?" questions go to Discussions.
+  - name: Gateway or protocol problem
+    url: https://github.com/fabcoded/blaueis-libmidea/issues
+    about: The Raspberry Pi gateway, its installer and the wire protocol live in blaueis-libmidea.
