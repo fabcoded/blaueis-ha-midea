@@ -52,6 +52,17 @@ Assistant's own flow engine. The `integration` marker is applied to
 every test in `tests/integration/` by that directory's `conftest.py` —
 don't add it per module.
 
+## How issues are triaged
+
+New issues start with `needs-triage`. After a first look they move to one of:
+
+- `needs-info` — waiting on the reporter (usually versions or a diagnostics bundle);
+- `ready-for-agent` — fully specified, small enough to be implemented from the issue text alone, by a person or a coding agent;
+- `ready-for-human` — needs judgement, hardware access or a decision;
+- `wontfix` — out of scope, with the reason in the closing comment.
+
+Issues labelled `wayfinder:*` belong to a planning map (an issue labelled `wayfinder:map` and its sub-issues); they track release work rather than user reports.
+
 ## Home Assistant–specific reminders
 
 - Python file changes require `ha core restart` — a config-entry reload does not reload `.py` files.

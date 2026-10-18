@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in the integration does not work as documented.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a hobby project, answered on a best-effort basis. A report with versions and a diagnostics bundle can usually be acted on; one without them usually gets a request for them first.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Set fan mode to High
+        2. Wait for the next status poll
+        3. The card shows Auto again
+    validations:
+      required: true
+  - type: input
+    id: integration-version
+    attributes:
+      label: Integration version
+      description: Settings → Devices & Services → Blaueis Midea AC, or the HACS page.
+    validations:
+      required: true
+  - type: input
+    id: gateway-version
+    attributes:
+      label: Gateway version
+      description: "`blaueis-gw --version` on the Pi, or the gateway device page in Home Assistant."
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+    validations:
+      required: true
+  - type: input
+    id: unit
+    attributes:
+      label: Air conditioner model
+      description: Brand and model as printed on the indoor unit's label, if you know it.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics bundle
+      description: |
+        Settings → Devices & Services → Blaueis Midea AC → ⋮ → Download Diagnostics, then attach the file here. The pre-shared key is redacted automatically; check the file for anything else you consider private (IP addresses, names) before attaching.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: From Settings → System → Logs, filtered for `blaueis`.
+      render: text
