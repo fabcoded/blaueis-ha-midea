@@ -209,4 +209,4 @@ def test_configure_guards_defaults(manager):
     manager.configure_guards({})
     assert manager._guard_temp_min == -15.0
     assert manager._guard_temp_max == 40.0
-    assert manager._safety_timeout == 300
+    assert manager._safety_timeout == 900

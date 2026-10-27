@@ -73,6 +73,67 @@ async def test_stale_sensor_triggers_temp_disable(hass, coordinator, armed_manag
     assert coordinator.device._shadow is None
 
 
+@pytest.mark.asyncio
+async def test_unchanged_value_reported_recently_is_fresh(hass, coordinator, armed_manager):
+    """A held value is fresh while the sensor keeps reporting it.
+
+    HA moves last_updated only on a value change; last_reported moves on
+    every write. Freshness must follow last_reported.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    hass.set_sensor(SENSOR, 22.0, last_updated=now - timedelta(hours=3), last_reported=now)
+
+    await armed_manager._tick()
+
+    assert armed_manager._temp_disabled is False
+    assert coordinator.device._shadow == {"celsius": 22.0}
+
+
+# ── Source listener (shadow refresh between ticks) ──
+
+
+def test_source_change_refreshes_shadow(hass, coordinator, armed_manager):
+    """New reading → shadow updated at once, no 0x40 sent."""
+    coordinator.device._shadow = {"celsius": 22.0}
+    hass.set_sensor(SENSOR, 21.5)
+
+    armed_manager._on_source_change(None)
+
+    assert coordinator.device._shadow == {"celsius": 21.5}
+    coordinator.device.set.assert_not_awaited()
+
+
+def test_source_change_bad_reading_left_to_tick(hass, coordinator, armed_manager):
+    """Unusable reading → listener does nothing; the tick decides."""
+    coordinator.device._shadow = {"celsius": 22.0}
+    hass.set_sensor(SENSOR, "unavailable", unit=None)
+
+    armed_manager._on_source_change(None)
+
+    assert coordinator.device._shadow == {"celsius": 22.0}
+    assert armed_manager._temp_disabled is False
+    coordinator.device.set.assert_not_awaited()
+
+
+@pytest.mark.parametrize("state", ["temp_disabled", "stopping", "inactive"])
+def test_source_change_ignored_unless_engaged(hass, coordinator, armed_manager, state):
+    """Listener never re-arms the shadow outside ENGAGED."""
+    coordinator.device._shadow = None
+    if state == "temp_disabled":
+        armed_manager._temp_disabled = True
+    elif state == "stopping":
+        armed_manager._stopping = True
+    else:
+        armed_manager._active = False
+    hass.set_sensor(SENSOR, 21.0)
+
+    armed_manager._on_source_change(None)
+
+    assert coordinator.device._shadow is None
+
+
 # ── TEMP-DISABLED → ENGAGED (recovery) ──
 
 

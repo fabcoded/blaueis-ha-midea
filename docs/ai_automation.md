@@ -215,7 +215,7 @@ async def submit_override(ws, entry_id: str, yaml_text: str, msg_id_start: int =
             "follow_me_function_sensor": "sensor.some_temperature",
             "follow_me_function_guard_temp_min": -15.0,
             "follow_me_function_guard_temp_max": 40.0,
-            "follow_me_function_safety_timeout": 300,
+            "follow_me_function_safety_timeout": 900,
             "glossary_overrides_yaml": yaml_text,
             "run_inventory_scan_now": False,
         },

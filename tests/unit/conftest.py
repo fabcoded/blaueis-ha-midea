@@ -57,6 +57,11 @@ class _ServiceValidationError(_HomeAssistantError):
         self.translation_placeholders = translation_placeholders or {}
 
 
+# ``@callback`` must leave the function intact (a MagicMock decorator would
+# replace it). Only patch the stub, never a real HA module.
+if isinstance(sys.modules["homeassistant.core"], MagicMock):
+    sys.modules["homeassistant.core"].callback = lambda func: func
+
 sys.modules["homeassistant.exceptions"].HomeAssistantError = _HomeAssistantError
 sys.modules["homeassistant.exceptions"].ServiceValidationError = _ServiceValidationError
 
@@ -114,10 +119,12 @@ sys.modules["homeassistant.components.climate"].HVACMode = _HVACMode
 class FakeState:
     """Mimics homeassistant.core.State for sensor readings."""
 
-    def __init__(self, value, unit="°C", last_updated=None):
+    def __init__(self, value, unit="°C", last_updated=None, last_reported=None):
         self.state = str(value)
         self.attributes = {"unit_of_measurement": unit} if unit else {}
         self.last_updated = last_updated or datetime.now(timezone.utc)
+        # Like HA: a write with an unchanged value moves only last_reported.
+        self.last_reported = last_reported or self.last_updated
 
 
 class FakeHass:
@@ -133,8 +140,8 @@ class FakeHass:
     def get(self, entity_id):
         return self._states.get(entity_id)
 
-    def set_sensor(self, entity_id, value, unit="°C", last_updated=None):
-        self._states[entity_id] = FakeState(value, unit, last_updated)
+    def set_sensor(self, entity_id, value, unit="°C", last_updated=None, last_reported=None):
+        self._states[entity_id] = FakeState(value, unit, last_updated, last_reported)
 
 
 class FakeDevice:

@@ -125,6 +125,10 @@ CONF_FMF_GUARD_TEMP_MAX = "follow_me_function_guard_temp_max"
 CONF_FMF_GUARD_TEMP_MIN = "follow_me_function_guard_temp_min"
 CONF_FMF_SAFETY_TIMEOUT = "follow_me_function_safety_timeout"
 CONF_FMF_SENSOR = "follow_me_function_sensor"
+# Default sensor timeout. Must cover a missed report: at least ~2.2x the
+# source's report interval. 900 s fits sensors that report every 5 min
+# (many battery Zigbee/Matter sensors); 300 s caused repeated fallbacks there.
+DEFAULT_FMF_SAFETY_TIMEOUT = 900
 
 # ── Midea operating_mode enum → HA HVACMode ────────────────
 # Single source lives in blaueis-core (``ux_gating.MODE_INT_TO_NAME``),
