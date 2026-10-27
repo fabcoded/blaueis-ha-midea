@@ -43,7 +43,11 @@ Shadow cleared:
 ```
 
 The shadow register is written by the Follow Me Manager (`set_follow_me_shadow`)
-and cleared on stop or temp-disable (`clear_follow_me_shadow`).
+and cleared on stop or temp-disable (`clear_follow_me_shadow`). While engaged,
+the manager writes it on every 30 s tick and also as soon as the source sensor
+changes state, so a new reading goes out with the next poll (at most ~15 s).
+The state-change path only refreshes the shadow; it never sends a 0x40 frame
+and never decides temp-disable or recovery, which stay on the tick.
 
 ### Layer 2: Control Plane — 0x40 SET (Follow Me Manager)
 
@@ -116,7 +120,7 @@ Open **Settings > Devices & Services > Blaueis Midea AC > Configure**.
 | Sensor | `follow_me_function_sensor` | "Follow Me — Temperature sensor" | — | HA temperature-class sensor entity. |
 | Guard min | `follow_me_function_guard_temp_min` | "Follow Me — Minimum temperature guard (°C)" | `-15` | Lower temperature bound (°C). Range -40..10. |
 | Guard max | `follow_me_function_guard_temp_max` | "Follow Me — Maximum temperature guard (°C)" | `40` | Upper temperature bound (°C). Range 25..50. |
-| Timeout | `follow_me_function_safety_timeout` | "Follow Me — Sensor timeout (seconds)" | `300` | Max sensor age in seconds. Range 60..3600. |
+| Timeout | `follow_me_function_safety_timeout` | "Follow Me — Sensor timeout (seconds)" | `900` | Max time since the sensor last reported, in seconds. Range 60..3600. At least 2.2 × the sensor's report interval. |
 
 The two flags do different jobs:
 
@@ -231,9 +235,31 @@ This catches a common misconfiguration:
 
 ### Sensor staleness timeout
 
-If `state.last_updated` is older than `safety_timeout` seconds, the reading
+If `state.last_reported` is older than `safety_timeout` seconds, the reading
 is rejected. This catches sensors that stop updating (e.g. dead battery,
 disconnected Zigbee device) without changing their state to "unavailable".
+
+The check uses `last_reported`, not `last_updated`: Home Assistant moves
+`last_updated` only when the value changes, so a sensor that keeps reporting
+the same reading would look stale and trip the watchdog. `last_reported` moves
+on every state write, changed or not. A source entity that holds a value must
+therefore still write its state at least once per timeout.
+
+Choose the timeout as at least 2.2 × the sensor's report interval, so a single
+missed report does not trip it. The default is 900 s, which covers sensors
+that report every 5 min (common for battery Zigbee and Matter sensors).
+300 s only suits sensors that report faster than about every 2 min.
+
+**Takeaway from the field (2026-10-25):** the earlier default of 300 s was too
+short for a typical battery sensor. The source in one installation (IKEA
+TIMMERFLOTTE over Matter) reports every 293 s and skips about every 30th
+report. With 300 s the watchdog disabled Follow Me 25 times in three days
+(2/4/9/10 per day), each for 4.5 to 5 min. On every fallback the AC jumps to
+its own sensor (mounted high, 2 to 3.5 K warmer) and adds its +1.5 K
+compensation to the set point; at T1 ≥ Tsc + 2 K it stops the compressor at
+once, so 9 of those fallbacks cost a compressor stop plus a cold restart.
+With the timeout at 900 s no fallback was seen. This led to the 900 s default,
+the 2.2 × rule above and the WARNING level for a temp-disable.
 
 ### Protocol range clamping
 
@@ -266,21 +292,23 @@ together in the config entry options dict.
 | INFO | "Follow Me Function started, source=..." | Activation (manual or auto-start) |
 | INFO | "Follow Me Function: sensor recovered, re-enabling" | Temp-disable cleared |
 | INFO | "Follow Me Function confirmed off by AC" | Disengage complete |
-| ERROR | "sensor lost/out-of-range/stale, temporarily disabling" | Watchdog triggered |
+| WARNING | "sensor lost/out-of-range/stale, temporarily disabling" | Watchdog triggered |
 | ERROR | "AC does not confirm follow_me, re-sending hello" | AC power cycle recovery |
 | ERROR | "AC still reports follow_me after end, re-sending" | Disengage retry |
 
 ### Common scenarios
 
-**Sensor lost**: Integration logs ERROR, clears shadow, sends End frame. Switch
+**Sensor lost**: Integration logs WARNING, clears shadow, sends End frame. Switch
 stays ON (persistent intent). When sensor returns, shadow re-armed + hello sent.
 
 **AC power cycle**: AC loses follow_me state. Next 30s tick detects disagreement,
 re-sends hello. Shadow register ensures next 15s poll carries the temperature.
 Full recovery within 30s.
 
-**Stale sensor**: Sensor state unchanged for > `safety_timeout` seconds. Same
-behavior as sensor lost — temp-disable until sensor updates.
+**Stale sensor**: No state report from the sensor for > `safety_timeout`
+seconds. Same behavior as sensor lost — temp-disable until the sensor reports
+again. If this repeats for a sensor that is working, the timeout is shorter
+than its report interval allows; see "Sensor staleness timeout".
 
 ### Diagnostics
 

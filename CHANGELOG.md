@@ -4,6 +4,23 @@ Notable changes to the Blaueis Midea integration.
 
 ## [Unreleased]
 
+### Fixed
+- **Follow Me no longer drops a sensor that keeps reporting the same value.**
+  The sensor timeout now follows `last_reported` instead of `last_updated`,
+  which Home Assistant moves only when the value changes. A steady room
+  temperature used to look stale and switch Follow Me off.
+
+### Changed
+- **Follow Me sensor timeout defaults to 900 s (was 300 s).** 300 s tripped on
+  sensors that report every 5 min whenever one report was missed, and every
+  fallback to the unit's own sensor could stop the compressor. Existing
+  installs keep their stored value. The options form now recommends at least
+  2.2 × the sensor's report interval.
+- **A new Follow Me reading reaches the AC sooner.** The integration now
+  reacts to the source sensor's state changes instead of waiting for its
+  30 s tick, so a new value goes out with the next poll.
+- **Follow Me temp-disable logs as WARNING instead of ERROR.**
+
 ## [0.1.0rc2] - 2026-10-18
 
 ### Added

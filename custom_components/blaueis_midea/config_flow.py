@@ -29,6 +29,7 @@ from .const import (
     CONF_GLOSSARY_OVERRIDES,
     CONF_HALF_DEGREE_STEPS,
     CONF_PSK,
+    DEFAULT_FMF_SAFETY_TIMEOUT,
     DISPLAY_BUZZER_MODE_DEFAULT,
     DISPLAY_BUZZER_POLICIES,
     DISPLAY_BUZZER_POLICY_NON_ENFORCED,
@@ -340,7 +341,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ): vol.All(vol.Coerce(float), vol.Range(min=25, max=50)),
             vol.Optional(
                 CONF_FMF_SAFETY_TIMEOUT,
-                default=opts.get(CONF_FMF_SAFETY_TIMEOUT, 300),
+                default=opts.get(CONF_FMF_SAFETY_TIMEOUT, DEFAULT_FMF_SAFETY_TIMEOUT),
             ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
             # Half-degree setpoint steps (default on). Always shown — not
             # cap-gated, since the half_deg cap flag is unreliable.

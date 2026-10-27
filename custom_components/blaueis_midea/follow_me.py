@@ -11,6 +11,9 @@ Two-layer architecture:
   Layer 2 — CONTROL PLANE (this manager, event-driven):
     0x40 SET follow_me=True  on activation, recovery, AC disagrees (30s tick).
     0x40 SET follow_me=False on deactivation, sensor lost/stale/OOR (30s tick).
+    A state-change listener on the source refreshes the shadow at once, so a
+    new reading reaches the AC with the next poll instead of the next tick.
+    The listener never sends 0x40; enable/disable decisions stay on the tick.
 
 State machine: IDLE → ENGAGED ↔ TEMP-DISABLED → DISENGAGING → IDLE.
 
@@ -27,9 +30,15 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.core import callback
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 
-from .const import CONF_FMF_GUARD_TEMP_MAX, CONF_FMF_GUARD_TEMP_MIN, CONF_FMF_SAFETY_TIMEOUT
+from .const import (
+    CONF_FMF_GUARD_TEMP_MAX,
+    CONF_FMF_GUARD_TEMP_MIN,
+    CONF_FMF_SAFETY_TIMEOUT,
+    DEFAULT_FMF_SAFETY_TIMEOUT,
+)
 
 if TYPE_CHECKING:
     from .coordinator import BlaueisMideaCoordinator
@@ -50,10 +59,11 @@ class BlauiesFollowMeManager:
         self._stopping = False
         self._temp_disabled = False
         self._cancel_timer = None
+        self._cancel_listener = None
         self._source_entity_id: str | None = None
         self._guard_temp_min: float = -15.0
         self._guard_temp_max: float = 40.0
-        self._safety_timeout: int = 300
+        self._safety_timeout: int = DEFAULT_FMF_SAFETY_TIMEOUT
 
     @property
     def active(self) -> bool:
@@ -66,7 +76,7 @@ class BlauiesFollowMeManager:
     def configure_guards(self, options: dict) -> None:
         self._guard_temp_min = options.get(CONF_FMF_GUARD_TEMP_MIN, -15.0)
         self._guard_temp_max = options.get(CONF_FMF_GUARD_TEMP_MAX, 40.0)
-        self._safety_timeout = options.get(CONF_FMF_SAFETY_TIMEOUT, 300)
+        self._safety_timeout = options.get(CONF_FMF_SAFETY_TIMEOUT, DEFAULT_FMF_SAFETY_TIMEOUT)
 
     async def async_start(self, source_entity_id: str) -> None:
         if self._active or self._stopping:
@@ -86,6 +96,7 @@ class BlauiesFollowMeManager:
         self._cancel_timer = async_track_time_interval(
             self.hass, self._tick, timedelta(seconds=self.KEEPALIVE_INTERVAL)
         )
+        self._cancel_listener = async_track_state_change_event(self.hass, [source_entity_id], self._on_source_change)
         _LOGGER.info(
             "Follow Me Function started, source=%s",
             source_entity_id,
@@ -94,6 +105,7 @@ class BlauiesFollowMeManager:
     async def async_stop(self) -> None:
         was_active = self._active
         self._active = False
+        self._kill_listener()
 
         self._coord.device.clear_follow_me_shadow()
 
@@ -121,7 +133,7 @@ class BlauiesFollowMeManager:
         if temp is None:
             if not self._temp_disabled:
                 self._temp_disabled = True
-                _LOGGER.error("Follow Me Function: sensor lost/out-of-range/stale, temporarily disabling")
+                _LOGGER.warning("Follow Me Function: sensor lost/out-of-range/stale, temporarily disabling")
                 self._coord.device.clear_follow_me_shadow()
                 with contextlib.suppress(Exception):
                     await self._coord.device.set(follow_me=False)
@@ -158,10 +170,28 @@ class BlauiesFollowMeManager:
         except Exception:
             _LOGGER.debug("follow_me=false resend failed")
 
+    @callback
+    def _on_source_change(self, _event) -> None:
+        """Refresh the shadow as soon as the source reports a usable value.
+
+        Only while ENGAGED. A lost/stale/out-of-range reading is left to the
+        tick, which owns temp-disable and recovery (and the 0x40 frames).
+        """
+        if not self._active or self._stopping or self._temp_disabled:
+            return
+        temp = self._read_source_temp()
+        if temp is not None:
+            self._coord.device.set_follow_me_shadow(temp)
+
     def _kill_timer(self) -> None:
         if self._cancel_timer:
             self._cancel_timer()
             self._cancel_timer = None
+
+    def _kill_listener(self) -> None:
+        if self._cancel_listener:
+            self._cancel_listener()
+            self._cancel_listener = None
 
     def _read_source_temp(self) -> float | None:
         """Read source sensor, convert to Celsius, check guards, clamp to [0, 50]."""
@@ -171,7 +201,10 @@ class BlauiesFollowMeManager:
         if not state or state.state in ("unavailable", "unknown", "None"):
             return None
 
-        age = (datetime.now(timezone.utc) - state.last_updated).total_seconds()
+        # last_reported, not last_updated: last_updated only moves when the
+        # value changes, so a sensor that keeps reporting the same reading
+        # would look stale. last_reported moves on every state write.
+        age = (datetime.now(timezone.utc) - state.last_reported).total_seconds()
         if age > self._safety_timeout:
             _LOGGER.debug("Source sensor stale (%.0fs > %ds)", age, self._safety_timeout)
             return None
