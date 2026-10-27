@@ -253,8 +253,8 @@ that report every 5 min (common for battery Zigbee and Matter sensors).
 **Takeaway from the field (2026-10-25):** the earlier default of 300 s was too
 short for a typical battery sensor. The source in one installation (IKEA
 TIMMERFLOTTE over Matter) reports every 293 s and skips about every 30th
-report. With 300 s the watchdog disabled Follow Me 25 times in three days
-(2/4/9/10 per day), each for 4.5 to 5 min. On every fallback the AC jumps to
+report. With 300 s the watchdog disabled Follow Me 25 times in about three
+days (22 to 25 Oct; 2/4/9/10 per calendar day), each for 4.5 to 5 min. On every fallback the AC jumps to
 its own sensor (mounted high, 2 to 3.5 K warmer) and adds its +1.5 K
 compensation to the set point; at T1 ≥ Tsc + 2 K it stops the compressor at
 once, so 9 of those fallbacks cost a compressor stop plus a cold restart.
