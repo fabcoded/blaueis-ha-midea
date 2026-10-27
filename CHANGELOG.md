@@ -4,6 +4,8 @@ Notable changes to the Blaueis Midea integration.
 
 ## [Unreleased]
 
+## [0.1.0rc3] - 2026-10-27
+
 ### Fixed
 - **Follow Me no longer drops a sensor that keeps reporting the same value.**
   The sensor timeout now follows `last_reported` instead of `last_updated`,
